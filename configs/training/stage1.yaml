@@ -20,7 +20,7 @@ num_backward_frames: 16  # Number of frames to use for backward pass in SyncNet
 
 data:
   dataset_key: "HDTF"  # Dataset to use for training
-  train_bs: 32  # Training batch size (actual batch size is train_bs*n_sample_frames)
+  train_bs: 8  # Training batch size (actual batch size is train_bs*n_sample_frames)
   image_size: 256  # Size of input images
   n_sample_frames: 1 # Number of frames to sample per batch
   num_workers: 8  # Number of data loading workers
