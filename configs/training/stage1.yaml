@@ -29,7 +29,7 @@ data:
   sample_method: pose_similarity_and_mouth_dissimilarity  # Method for sampling frames
   top_k_ratio: 0.51  # Ratio for top-k sampling
   contorl_face_min_size: True  # Whether to control minimum face size
-  min_face_size: 150  # Minimum face size in pixels
+  min_face_size: 110 # 150  # Minimum face size in pixels
 
 loss_params:
   l1_loss: 1.0  # Weight for L1 loss
