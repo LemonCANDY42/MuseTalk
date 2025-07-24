@@ -16,3 +16,7 @@ ffplay*
 debug
 exp_out
 .gradio
+
+data/
+*.mp4
+*.wav
