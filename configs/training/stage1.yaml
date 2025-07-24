@@ -1,9 +1,10 @@
 exp_name: 'test'  # Name of the experiment
 output_dir: './exp_out/stage1/'  # Directory to save experiment outputs
 unet_sub_folder: musetalkV15  # Subfolder name for UNet model
-random_init_unet: True  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
+random_init_unet: False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
-pretrained_model_name_or_path: "./models"  # Path to pretrained models
+pretrained_model_name_or_path: "./models"  # "./models"   # Path to pretrained models
+unet_model_name: "unet.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
 vae_type: "sd-vae"  # Type of VAE model to use
@@ -23,7 +24,7 @@ data:
   train_bs: 8  # Training batch size (actual batch size is train_bs*n_sample_frames)
   image_size: 256  # Size of input images
   n_sample_frames: 1 # Number of frames to sample per batch
-  num_workers: 32  # Number of data loading workers
+  num_workers: 16  # Number of data loading workers
   audio_padding_length_left: 2  # Left padding length for audio features
   audio_padding_length_right: 2  # Right padding length for audio features
   sample_method: pose_similarity_and_mouth_dissimilarity  # Method for sampling frames

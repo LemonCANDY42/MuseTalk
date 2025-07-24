@@ -309,7 +309,7 @@ class FaceDataset(Dataset):
                 print(f"meta file error:{meta_path}")
                 print(e)
                 attempts += 1
-                time.sleep(0.1)
+                time.sleep(0.01)
                 continue
             
             video_path = meta_data["mp4_path"]
@@ -341,7 +341,7 @@ class FaceDataset(Dataset):
                 print(f"video file error:{video_path}")
                 print(e)
                 attempts += 1
-                time.sleep(0.1)
+                time.sleep(0.01)
                 continue
 
             shift_landmarks, bbox_list_union, face_shapes = shift_landmarks_to_face_coordinates(
@@ -464,7 +464,7 @@ class FaceDataset(Dataset):
                 print(f"audio file error:{wav_path}")
                 print(e)
                 attempts += 1
-                time.sleep(0.1)
+                time.sleep(0.01)
                 continue
             
             mel = self.crop_audio_window(audio_feature_mel, audio_offset)
