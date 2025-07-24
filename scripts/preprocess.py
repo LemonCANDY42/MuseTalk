@@ -314,10 +314,10 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
         video_path = os.path.join(org_path, vid)
         audio_output_path = os.path.join(dst_path, os.path.splitext(vid)[0] + ".wav")
         
-        # 如果音频文件已存在，跳过处理
-        if os.path.exists(audio_output_path):
-            print(f"音频文件已存在，跳过: {audio_output_path}")
-            return
+        # # 如果音频文件已存在，跳过处理
+        # if os.path.exists(audio_output_path):
+        #     print(f"音频文件已存在，跳过: {audio_output_path}")
+        #     return
         
         # 首先尝试正常提取音频
         command = [
@@ -330,7 +330,7 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
             subprocess.run(command, check=True, capture_output=True)
             print(f"音频已保存到: {audio_output_path}")
         except subprocess.CalledProcessError as e:
-            print(f"从视频 {vid} 提取音频失败，尝试生成静音音频...")
+            print(f"从视频 {vid} 提取音频失败，尝试为视频添加静音音轨并重新提取...")
             
             # 获取视频时长
             try:
@@ -341,20 +341,58 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
                 duration_result = subprocess.run(duration_command, capture_output=True, text=True, check=True)
                 duration = float(duration_result.stdout.strip())
                 
-                # 生成静音音频
-                silent_command = [
+                # 创建带静音音轨的临时视频文件
+                temp_video_path = video_path.replace('.mp4', '_with_audio.mp4')
+                add_audio_command = [
                     'ffmpeg', '-threads', '8', '-hide_banner', '-y',
+                    '-i', video_path,
                     '-f', 'lavfi', '-i', f'anullsrc=channel_layout=mono:sample_rate=16000',
-                    '-t', str(duration), '-acodec', 'pcm_s16le', '-f', 'wav',
-                    audio_output_path
+                    '-c:v', 'copy', '-c:a', 'aac', '-shortest',
+                    temp_video_path
                 ]
                 
-                subprocess.run(silent_command, check=True, capture_output=True)
-                print(f"已生成静音音频: {audio_output_path} (时长: {duration:.2f}秒)")
+                subprocess.run(add_audio_command, check=True, capture_output=True)
                 
-            except (subprocess.CalledProcessError, ValueError,Exceptions) as e:
-
-                print(f"完全无法为视频 {vid} 生成音频文件: {e}")
+                # 替换原视频文件
+                os.replace(temp_video_path, video_path)
+                
+                # 重新尝试提取音频
+                subprocess.run(command, check=True, capture_output=True)
+                print(f"已为视频添加静音音轨并提取音频: {audio_output_path} (时长: {duration:.2f}秒)")
+                
+            except (subprocess.CalledProcessError, ValueError, Exception) as e:
+                print(f"完全无法为视频 {vid} 处理音频: {e}")
+                # 作为最后的备选方案，生成静音WAV文件
+                try:
+                    # 获取视频帧率和时长信息
+                    info_command = [
+                        'ffprobe', '-v', 'quiet', '-select_streams', 'v:0',
+                        '-show_entries', 'stream=r_frame_rate,duration',
+                        '-of', 'csv=p=0', video_path
+                    ]
+                    info_result = subprocess.run(info_command, capture_output=True, text=True, check=True)
+                    info_parts = info_result.stdout.strip().split(',')
+                    
+                    if len(info_parts) >= 2 and info_parts[1]:
+                        duration = float(info_parts[1])
+                    else:
+                        # 如果无法从流信息获取时长，使用format duration
+                        duration_result = subprocess.run(duration_command, capture_output=True, text=True, check=True)
+                        duration = float(duration_result.stdout.strip())
+                    
+                    # 生成静音WAV文件
+                    silent_command = [
+                        'ffmpeg', '-threads', '8', '-hide_banner', '-y',
+                        '-f', 'lavfi', '-i', f'anullsrc=channel_layout=mono:sample_rate=16000',
+                        '-t', str(duration), '-acodec', 'pcm_s16le', '-f', 'wav',
+                        audio_output_path
+                    ]
+                    
+                    subprocess.run(silent_command, check=True, capture_output=True)
+                    print(f"已生成备选静音音频文件: {audio_output_path} (时长: {duration:.2f}秒)")
+                    
+                except Exception as final_error:
+                    print(f"所有音频处理方法都失败了: {final_error}")
     
     # 使用线程池并行处理音频提取
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
