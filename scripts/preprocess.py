@@ -16,6 +16,8 @@ import sys
 
 import concurrent.futures
 import psutil
+import multiprocessing as mp
+import gc
 
 def get_cpu_usage():
     """获取当前CPU使用率"""
@@ -62,6 +64,7 @@ class AnalyzeFace:
         self.dwpose = init_model(config_file, checkpoint_file, device=self.device)
         self.facedet = FaceAlignment(LandmarksType._2D, flip_input=False, device=self.device)
 
+    @torch.no_grad()
     def __call__(self, im: np.ndarray) -> Tuple[List[np.ndarray], np.ndarray]:
         """
         Detect faces and keypoints in the given image.
@@ -451,9 +454,131 @@ def generate_train_list(cfg):
 
     print(val_list_hdtf)    
 
+# 全局变量用于进程间共享配置
+_global_config = None
+_global_analyzer = None
+
+def init_worker_process(config_data):
+    """初始化工作进程，为每个进程创建独立的模型实例"""
+    global _global_config, _global_analyzer
+    
+    _global_config = config_data
+    device = _global_config['device']
+    config_file = _global_config['config_file']
+    checkpoint_file = _global_config['checkpoint_file']
+    
+    # 每个进程创建自己的模型实例
+    _global_analyzer = AnalyzeFace(device, config_file, checkpoint_file)
+    
+    # # 设置CUDA上下文和内存管理
+    # if device == "cuda":
+    #     torch.cuda.set_device(0)
+    #     torch.cuda.empty_cache()
+
+
+def process_video_frames_batch(frame_batch):
+    """批量处理视频帧，提高GPU利用率"""
+    global _global_analyzer
+    
+    results = []
+    with torch.no_grad():
+        for frame_bgr in frame_batch:
+            pts_list, bbox_list = _global_analyzer(frame_bgr)
+            results.append((pts_list, bbox_list))
+            
+    return results
+
+def process_single_video_worker(args):
+    """工作进程中处理单个视频文件"""
+    vid, org_path, dst_path = args
+    global _global_analyzer
+    
+    if not vid.endswith('.mp4'):
+        return f"跳过非MP4文件: {vid}"
+    
+    vid_path = os.path.join(org_path, vid)
+    wav_path = vid_path.replace(".mp4", ".wav")
+    vid_meta = os.path.join(dst_path, os.path.splitext(vid)[0] + ".json")
+    
+    # 双重检查：如果文件已存在则跳过
+    if os.path.exists(vid_meta):
+        return f"跳过已存在的文件: {vid}"
+    
+    print(f'process video {vid}')
+    
+    total_bbox_list = []
+    total_pts_list = []
+    isvalid = True
+    
+    try:
+        # 使用decord读取视频
+        cap = decord.VideoReader(vid_path, fault_tol=1)
+        total_frames = len(cap)
+        
+        # 逐帧处理，使用torch.no_grad()优化内存
+        for frame_idx in range(total_frames):
+            frame = cap[frame_idx]
+            if frame_idx == 0:
+                video_height, video_width, _ = frame.shape
+            
+            frame_bgr = cv2.cvtColor(frame.asnumpy(), cv2.COLOR_BGR2RGB)
+            
+            # 使用torch.no_grad()处理每一帧
+            with torch.no_grad():
+                pts_list, bbox_list = _global_analyzer(frame_bgr)
+                
+                if len(bbox_list) > 0 and None not in bbox_list:
+                    bbox = bbox_list[0]
+                else:
+                    isvalid = False
+                    bbox = []
+                    print(f"set isvalid to False as broken img in {frame_idx} of {vid}")
+                    break
+                
+                if len(pts_list) > 0 and pts_list is not None:
+                    pts = pts_list.tolist()
+                else:
+                    isvalid = False
+                    pts = []
+                    break
+                
+                if frame_idx == 0:
+                    x1, y1, x2, y2 = bbox
+                    face_height, face_width = y2 - y1, x2 - x1
+                
+                total_pts_list.append(pts)
+                total_bbox_list.append(bbox)
+                
+        torch.cuda.empty_cache()
+        # 释放视频读取器
+        del cap
+        gc.collect()
+        
+        if isvalid:
+            meta_data = {
+                "mp4_path": vid_path,
+                "wav_path": wav_path,
+                "video_size": [video_height, video_width],
+                "face_size": [face_height, face_width],
+                "frames": total_frames,
+                "face_list": total_bbox_list,
+                "landmark_list": total_pts_list,
+                "isvalid": isvalid,
+            }
+            
+            with open(vid_meta, 'w') as f:
+                json.dump(meta_data, f, indent=4)
+            
+            return f"成功处理视频: {vid}"
+        else:
+            return f"视频处理失败 (无效帧): {vid}"
+            
+    except Exception as e:
+        return f"读取视频失败 {vid}: {e}"
+
 def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     """
-    Convert video files to a specified format and save them to the destination path.
+    使用进程池并行处理视频文件，每个进程有独立的模型实例
 
     Parameters:
     org_path (str): The directory containing the original video files.
@@ -473,10 +598,11 @@ def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
             if os.path.exists(vid_meta):
                 processed_count += 1
             else:
+                # 只加入mp4文件
                 unprocessed_vid_list.append(vid)
-        else:
-            # 非MP4文件也加入未处理列表，让后续逻辑处理
-            unprocessed_vid_list.append(vid)
+        # else:
+        #     # 非MP4文件也加入未处理列表，让后续逻辑处理
+        #     unprocessed_vid_list.append(vid)
     
     print(f"发现 {len(vid_list)} 个文件，其中 {processed_count} 个已处理，{len(unprocessed_vid_list)} 个待处理")
     
@@ -488,126 +614,60 @@ def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     config_file = './musetalk/utils/dwpose/rtmpose-l_8xb32-270e_coco-ubody-wholebody-384x288.py'
     checkpoint_file = './models/dwpose/dw-ll_ucoco_384.pth'
     
-    # 检查GPU显存，如果大于16GB则创建四个analyze_face实例
-    use_multiple_analyzers = False
-    num_analyzers = 1
+    # 计算进程数：根据GPU显存和CPU核心数
+    cpu_count = psutil.cpu_count(logical=False)  # 物理核心数
+    
     if device == "cuda":
         gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # 转换为GB
-        if gpu_memory > 16:
-            use_multiple_analyzers = True
-            num_analyzers = 4
-            print(f"检测到GPU显存 {gpu_memory:.1f}GB > 16GB，启用{num_analyzers}个analyze_face实例优化")
-    
-    # 创建多个analyze_face实例
-    analyzers = []
-    if use_multiple_analyzers:
-        for i in range(num_analyzers):
-            analyzers.append(AnalyzeFace(device, config_file, checkpoint_file))
+        if gpu_memory >= 24:  # RTX 5090 32GB
+            max_workers = min(8, cpu_count // 12)  # 8个进程/每个进程12个CPU核心
+        elif gpu_memory <= 25:  # RTX 5090 32GB
+            max_workers = min(6, cpu_count // 12)  # 6个进程/每个进程12个CPU核心
+        elif gpu_memory >= 16:
+            max_workers = min(4, cpu_count // 16)  # 4个进程
+        else:
+            max_workers = min(2, cpu_count // 24)  # 2个进程
     else:
-        analyzers.append(AnalyzeFace(device, config_file, checkpoint_file))
-
-    def process_single_video(vid, thread_id=None):
-        """处理单个视频文件"""
-        
-        # 根据线程ID选择对应的analyze_face实例
-        if use_multiple_analyzers:
-            current_analyze_face = analyzers[thread_id % num_analyzers]
-        else:
-            current_analyze_face = analyzers[0]
-        
-        if vid.endswith('.mp4'):
-            vid_path = os.path.join(org_path, vid)
-            wav_path = vid_path.replace(".mp4",".wav")
-            vid_meta = os.path.join(dst_path, os.path.splitext(vid)[0] + ".json")
-            
-            # 双重检查：如果文件已存在则跳过（防止并发处理时的竞争条件）
-            if os.path.exists(vid_meta):
-                return f"跳过已存在的文件: {vid}"
-            
-            print('process video {}'.format(vid))
-
-            total_bbox_list = []
-            total_pts_list = []
-            isvalid = True
-
-            # process
-            try:
-                cap = decord.VideoReader(vid_path, fault_tol=1)
-            except Exception as e:
-                return f"读取视频失败 {vid}: {e}"
-
-            total_frames = len(cap)
-            for frame_idx in range(total_frames):
-                frame = cap[frame_idx]
-                if frame_idx==0:
-                    video_height,video_width,_ = frame.shape
-                frame_bgr = cv2.cvtColor(frame.asnumpy(), cv2.COLOR_BGR2RGB)
-                pts_list, bbox_list = current_analyze_face(frame_bgr)
-
-                if len(bbox_list)>0 and None not in bbox_list:
-                    bbox = bbox_list[0]
-                else:
-                    isvalid = False
-                    bbox = []
-                    print(f"set isvalid to False as broken img in {frame_idx} of {vid}")
-                    break
-
-                #print(pts_list)
-                if len(pts_list)>0 and pts_list is not None:
-                    pts = pts_list.tolist()
-                else:
-                    isvalid = False
-                    pts = []
-                    break
-
-                if frame_idx==0:
-                    x1,y1,x2,y2 = bbox 
-                    face_height, face_width = y2-y1,x2-x1
-
-                total_pts_list.append(pts)
-                total_bbox_list.append(bbox)
-
-            meta_data = {
-                    "mp4_path": vid_path,
-                     "wav_path": wav_path,
-                     "video_size": [video_height, video_width],
-                     "face_size": [face_height, face_width],
-                     "frames": total_frames,
-                     "face_list": total_bbox_list,
-                     "landmark_list": total_pts_list,
-                     "isvalid":isvalid,
-            }        
-            with open(vid_meta, 'w') as f:
-                json.dump(meta_data, f, indent=4)
-            
-            return f"成功处理视频: {vid}"
-        else:
-            return f"跳过非MP4文件: {vid}"
-
-    # 获取CPU核心数并计算线程数
-    cpu_count = psutil.cpu_count(logical=False)  # 物理核心数
-    max_workers = max(1, cpu_count // 24)  # CPU总数//24，至少为1
+        max_workers = min(1, cpu_count // 24)
     
-    print(f"检测到 {cpu_count} 个CPU核心，使用 {max_workers} 个线程进行并行处理")
+    max_workers = max(1, max_workers)  # 至少1个进程
     
-    # 使用线程池并行处理视频（只处理未处理的文件）
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor: # 线程是 ThreadPoolExecutor
-        # 提交所有任务，并为每个任务分配线程ID
-        future_to_vid = {}
-        for i, vid in enumerate(unprocessed_vid_list):
-            future = executor.submit(process_single_video, vid, i)
-            future_to_vid[future] = vid
+    if device == "cuda":
+        gpu_memory_info = f"，GPU显存 {torch.cuda.get_device_properties(0).total_memory / (1024**3):.1f}GB"
+    else:
+        gpu_memory_info = ""
+    
+    print(f"检测到 {cpu_count} 个CPU核心{gpu_memory_info}")
+    print(f"使用 {max_workers} 个进程进行并行处理")
+    
+    # 准备进程初始化参数
+    config_data = {
+        'device': device,
+        'config_file': config_file,
+        'checkpoint_file': checkpoint_file
+    }
+    
+    # 准备任务参数
+    tasks = [(vid, org_path, dst_path) for vid in unprocessed_vid_list]
+    
+    # 使用进程池并行处理视频
+    with mp.Pool(processes=max_workers, 
+                 initializer=init_worker_process, 
+                 initargs=(config_data,)) as pool:
         
         # 使用tqdm显示进度
-        for future in tqdm(concurrent.futures.as_completed(future_to_vid), 
-                          total=len(unprocessed_vid_list), desc="处理视频"):
-            vid = future_to_vid[future]
-            try:
-                result = future.result()
-                if "成功处理" in result:
-                    print(result)
-            except Exception as e:
-                print(f"处理视频 {vid} 时出现异常: {e}")
+        results = []
+        for result in tqdm(pool.imap(process_single_video_worker, tasks), 
+                          total=len(tasks), desc="处理视频"):
+            results.append(result)
+            if "成功处理" in result:
+                print(result)
+    
+    # 清理GPU缓存
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    print("所有视频处理完成")
 
 
 def main(cfg):
@@ -633,7 +693,7 @@ def main(cfg):
     # 2. Segment videos into 30-second clips
     segment_video(cfg.video_root_25fps, cfg.video_audio_clip_root, vid_list, segment_duration=cfg.clip_len_second)
     
-    # # # 3. Extract audio
+    # # # # 3. Extract audio
     clip_vid_list = os.listdir(cfg.video_audio_clip_root)
     extract_audio(cfg.video_audio_clip_root, cfg.video_audio_clip_root, clip_vid_list)
 
@@ -645,6 +705,9 @@ def main(cfg):
     print("done")
 
 if __name__ == "__main__":
+    # 设置多进程启动方法
+    mp.set_start_method('spawn', force=True)
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="./configs/training/preprocess.yaml")
     args = parser.parse_args()
