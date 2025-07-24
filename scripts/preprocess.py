@@ -314,6 +314,12 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
         video_path = os.path.join(org_path, vid)
         audio_output_path = os.path.join(dst_path, os.path.splitext(vid)[0] + ".wav")
         
+        # 如果音频文件已存在，跳过处理
+        if os.path.exists(audio_output_path):
+            print(f"音频文件已存在，跳过: {audio_output_path}")
+            return
+        
+        # 首先尝试正常提取音频
         command = [
             'ffmpeg', '-threads', '8', '-hide_banner', '-y', '-i', video_path,
             '-vn', '-acodec', 'pcm_s16le', '-f', 'wav',
@@ -321,10 +327,34 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
         ]
         
         try:
-            subprocess.run(command, check=True)
+            subprocess.run(command, check=True, capture_output=True)
             print(f"音频已保存到: {audio_output_path}")
         except subprocess.CalledProcessError as e:
-            print(f"从视频 {vid} 提取音频时出现错误: {e}")
+            print(f"从视频 {vid} 提取音频失败，尝试生成静音音频...")
+            
+            # 获取视频时长
+            try:
+                duration_command = [
+                    'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1', video_path
+                ]
+                duration_result = subprocess.run(duration_command, capture_output=True, text=True, check=True)
+                duration = float(duration_result.stdout.strip())
+                
+                # 生成静音音频
+                silent_command = [
+                    'ffmpeg', '-threads', '8', '-hide_banner', '-y',
+                    '-f', 'lavfi', '-i', f'anullsrc=channel_layout=mono:sample_rate=16000',
+                    '-t', str(duration), '-acodec', 'pcm_s16le', '-f', 'wav',
+                    audio_output_path
+                ]
+                
+                subprocess.run(silent_command, check=True, capture_output=True)
+                print(f"已生成静音音频: {audio_output_path} (时长: {duration:.2f}秒)")
+                
+            except (subprocess.CalledProcessError, ValueError,Exceptions) as e:
+
+                print(f"完全无法为视频 {vid} 生成音频文件: {e}")
     
     # 使用线程池并行处理音频提取
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -395,6 +425,27 @@ def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     Returns:
     None
     """
+    # 检查已经处理过的文件，过滤出未处理的文件
+    unprocessed_vid_list = []
+    processed_count = 0
+    
+    for vid in vid_list:
+        if vid.endswith('.mp4'):
+            vid_meta = os.path.join(dst_path, os.path.splitext(vid)[0] + ".json")
+            if os.path.exists(vid_meta):
+                processed_count += 1
+            else:
+                unprocessed_vid_list.append(vid)
+        else:
+            # 非MP4文件也加入未处理列表，让后续逻辑处理
+            unprocessed_vid_list.append(vid)
+    
+    print(f"发现 {len(vid_list)} 个文件，其中 {processed_count} 个已处理，{len(unprocessed_vid_list)} 个待处理")
+    
+    if len(unprocessed_vid_list) == 0:
+        print("所有文件都已处理完成，无需重新处理")
+        return
+    
     device = "cuda" if torch.cuda.is_available() else "cpu"
     config_file = './musetalk/utils/dwpose/rtmpose-l_8xb32-270e_coco-ubody-wholebody-384x288.py'
     checkpoint_file = './models/dwpose/dw-ll_ucoco_384.pth'
@@ -430,8 +481,11 @@ def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
             vid_path = os.path.join(org_path, vid)
             wav_path = vid_path.replace(".mp4",".wav")
             vid_meta = os.path.join(dst_path, os.path.splitext(vid)[0] + ".json")
+            
+            # 双重检查：如果文件已存在则跳过（防止并发处理时的竞争条件）
             if os.path.exists(vid_meta):
                 return f"跳过已存在的文件: {vid}"
+            
             print('process video {}'.format(vid))
 
             total_bbox_list = []
@@ -498,17 +552,17 @@ def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     
     print(f"检测到 {cpu_count} 个CPU核心，使用 {max_workers} 个线程进行并行处理")
     
-    # 使用线程池并行处理视频
+    # 使用线程池并行处理视频（只处理未处理的文件）
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor: # 线程是 ThreadPoolExecutor
         # 提交所有任务，并为每个任务分配线程ID
         future_to_vid = {}
-        for i, vid in enumerate(vid_list):
+        for i, vid in enumerate(unprocessed_vid_list):
             future = executor.submit(process_single_video, vid, i)
             future_to_vid[future] = vid
         
         # 使用tqdm显示进度
         for future in tqdm(concurrent.futures.as_completed(future_to_vid), 
-                          total=len(vid_list), desc="处理视频"):
+                          total=len(unprocessed_vid_list), desc="处理视频"):
             vid = future_to_vid[future]
             try:
                 result = future.result()
@@ -541,10 +595,10 @@ def main(cfg):
     # 2. Segment videos into 30-second clips
     segment_video(cfg.video_root_25fps, cfg.video_audio_clip_root, vid_list, segment_duration=cfg.clip_len_second)
     
-    # # 3. Extract audio
+    # # # 3. Extract audio
     clip_vid_list = os.listdir(cfg.video_audio_clip_root)
     extract_audio(cfg.video_audio_clip_root, cfg.video_audio_clip_root, clip_vid_list)
-    
+
     # 4. Generate video metadata
     analyze_video(cfg.video_audio_clip_root, cfg.meta_root, clip_vid_list)
     
