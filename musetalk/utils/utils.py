@@ -121,6 +121,11 @@ def get_mouth_region(frames, image_pred, pixel_values_face_mask):
         frames_cropped = frames[b, :, min_y:max_y, min_x:max_x]
         image_pred_cropped = image_pred[b, :, min_y:max_y, min_x:max_x]
         # Resize the cropped images to 256*256
+        
+        # 如果有一条边等于0，则不进行resize
+        if frames_cropped.unsqueeze(0).shape[2] == 0 or frames_cropped.unsqueeze(0).shape[3] == 0:
+            print(f"skipping image which shape is {frames_cropped.unsqueeze(0).shape} have zero dimension")
+            continue
         frames_resized = F.interpolate(frames_cropped.unsqueeze(
             0), size=(256, 256), mode='bilinear', align_corners=False)
         image_pred_resized = F.interpolate(image_pred_cropped.unsqueeze(
