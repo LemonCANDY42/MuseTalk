@@ -172,6 +172,7 @@ def initialize_dataloaders(cfg):
         batch_size=cfg.data.train_bs,
         shuffle=True,
         num_workers=cfg.data.num_workers,
+        pin_memory=True,  
     )
     
     dataloader_dict['val_dataset'] = PortraitDataset(cfg={
@@ -194,7 +195,9 @@ def initialize_dataloaders(cfg):
         dataloader_dict['val_dataset'],
         batch_size=cfg.data.train_bs,
         shuffle=True,
-        num_workers=1,
+        num_workers=1,  # 验证时只使用1个worker
+        pin_memory=False,  # 禁用pin_memory
+        persistent_workers=False,  # 禁用persistent_workers
     )
     
     return dataloader_dict
@@ -282,6 +285,7 @@ def initialize_vgg(cfg, accelerator):
         return vgg_IN, pyramid, downsampler
     return None, None, None
 
+@torch.no_grad()  # 添加no_grad装饰器防止梯度计算
 def validation(
     cfg,
     val_dataloader,
@@ -296,43 +300,55 @@ def validation(
 ):
     """Validation function for model evaluation"""
     net.eval()  # Set the model to evaluation mode
-    for batch in val_dataloader:
-        # The same ref_latents
-        ref_pixel_values = batch["pixel_values_ref_img"].to(weight_dtype).to(
-            accelerator.device, non_blocking=True
-        )
-        pixel_values = batch["pixel_values_vid"].to(weight_dtype).to(
-            accelerator.device, non_blocking=True
-        )
-        bsz, num_frames, c, h, w = ref_pixel_values.shape
+    
+    try:
+        for batch in val_dataloader:
+            # The same ref_latents
+            ref_pixel_values = batch["pixel_values_ref_img"].to(weight_dtype).to(
+                accelerator.device, non_blocking=True
+            )
+            pixel_values = batch["pixel_values_vid"].to(weight_dtype).to(
+                accelerator.device, non_blocking=True
+            )
+            bsz, num_frames, c, h, w = ref_pixel_values.shape
 
-        audio_prompts = process_audio_features(cfg, batch, wav2vec, bsz, num_frames, weight_dtype)
-        # audio feature for unet
-        audio_prompts = rearrange(
-            audio_prompts, 
-            'b f c h w-> (b f) c h w'
-        )
-        audio_prompts = rearrange(
-            audio_prompts, 
-            '(b f) c h w -> (b f) (c h) w', 
-            b=bsz
-        )
-        # different masked_latents
-        image_pred_train = get_image_pred(
-            pixel_values, ref_pixel_values, audio_prompts, vae, net, weight_dtype)
-        image_pred_infer = get_image_pred(
-            ref_pixel_values, ref_pixel_values, audio_prompts, vae, net, weight_dtype)
+            audio_prompts = process_audio_features(cfg, batch, wav2vec, bsz, num_frames, weight_dtype)
+            # audio feature for unet
+            audio_prompts = rearrange(
+                audio_prompts, 
+                'b f c h w-> (b f) c h w'
+            )
+            audio_prompts = rearrange(
+                audio_prompts, 
+                '(b f) c h w -> (b f) (c h) w', 
+                b=bsz
+            )
+            # different masked_latents
+            image_pred_train = get_image_pred(
+                pixel_values, ref_pixel_values, audio_prompts, vae, net, weight_dtype)
+            image_pred_infer = get_image_pred(
+                ref_pixel_values, ref_pixel_values, audio_prompts, vae, net, weight_dtype)
 
-        process_and_save_images(
-            batch,
-            image_pred_train,
-            image_pred_infer,
-            save_dir,
-            global_step,
-            accelerator,
-            cfg.num_images_to_keep,
-            syncnet_score
-        )
-        # only infer 1 image in validation
-        break
-    net.train()  # Set the model back to training mode
+            process_and_save_images(
+                batch,
+                image_pred_train,
+                image_pred_infer,
+                save_dir,
+                global_step,
+                accelerator,
+                cfg.num_images_to_keep,
+                syncnet_score
+            )
+            
+            # 验证后立即清理内存
+            del ref_pixel_values, pixel_values, audio_prompts
+            del image_pred_train, image_pred_infer
+            
+            # only infer 1 image in validation
+            break
+            
+    finally:
+        # 确保验证结束后清理CUDA缓存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        net.train()  # Set the model back to training mode
