@@ -61,6 +61,7 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
     model_dict['vae'] = AutoencoderKL.from_pretrained(
         cfg.pretrained_model_name_or_path,
         subfolder=cfg.vae_type,
+        torch_dtype=torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.float16 if cfg.solver.mixed_precision == 'fp16' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
     )
 
     unet_config_file = os.path.join(
@@ -89,7 +90,8 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
 
     model_dict['net'] = Net(model_dict['unet'])
 
-    model_dict['wav2vec'] = WhisperModel.from_pretrained(cfg.whisper_path).to(
+    model_dict['wav2vec'] = WhisperModel.from_pretrained(cfg.whisper_path,torch_dtype=torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.float16 if cfg.solver.mixed_precision == 'fp16' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
+                                                         ).to(
         device="cuda", dtype=weight_dtype).eval()
     model_dict['wav2vec'].requires_grad_(False)
 

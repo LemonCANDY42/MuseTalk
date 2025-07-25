@@ -4,7 +4,7 @@ unet_sub_folder: musetalkV15  # Subfolder name for UNet model
 random_init_unet: False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
 pretrained_model_name_or_path: "./models"  # Path to pretrained models
-unet_model_name: "unet.pth" # "unet.pth"
+unet_model_name: "unet-2025-7-25-6000.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
 vae_type: "sd-vae"  # Type of VAE model to use
@@ -17,14 +17,14 @@ cropping_jaw2edge_margin_mean: 10  # Mean margin for jaw-to-edge cropping
 cropping_jaw2edge_margin_std: 10  # Standard deviation for jaw-to-edge cropping
 crop_type: "dynamic_margin_crop_resize"  # Type of cropping method
 random_margin_method: "normal"  # Method for random margin generation
-num_backward_frames: 16  # Number of frames to use for backward pass in SyncNet
+num_backward_frames: 16 # 16  # Number of frames to use for backward pass in SyncNet
 
 data:
   dataset_key: "HDTF"  # Dataset to use for training
-  train_bs: 2  # Training batch size (actual batch size is train_bs*n_sample_frames)
+  train_bs: 1  # Training batch size (actual batch size is train_bs*n_sample_frames)
   image_size: 256  # Size of input images
-  n_sample_frames: 16  # Number of frames to sample per batch
-  num_workers: 8  # Number of data loading workers
+  n_sample_frames: 16 # 16 # Number of frames to sample per batch
+  num_workers: 4 # 8  # Number of data loading workers
   audio_padding_length_left: 2  # Left padding length for audio features
   audio_padding_length_right: 2  # Right padding length for audio features
   sample_method: pose_similarity_and_mouth_dissimilarity  # Method for sampling frames
@@ -62,9 +62,9 @@ discriminator_train_params:
   start_gan: 1000  # Step to start GAN training
 
 solver:
-  gradient_accumulation_steps: 8  # Number of steps for gradient accumulation
+  gradient_accumulation_steps: 8 # 8  # Number of steps for gradient accumulation
   uncond_steps: 10  # Number of unconditional steps
-  mixed_precision: 'bf16'  # Precision mode for training
+  mixed_precision: 'bf16' # 'bf16' 'fp32' # Precision mode for training
   enable_xformers_memory_efficient_attention: True  # Whether to use memory efficient attention
   gradient_checkpointing: True  # Whether to use gradient checkpointing
   max_train_steps: 250000  # Maximum number of training steps
@@ -81,7 +81,7 @@ solver:
   adam_weight_decay: 1.0e-2  # Weight decay for Adam optimizer
   adam_epsilon: 1.0e-8  # Epsilon for Adam optimizer
 
-total_limit: 10  # Maximum number of checkpoints to keep
+total_limit: 5  # Maximum number of checkpoints to keep
 save_model_epoch_interval: 250000  # Interval between model saves
 checkpointing_steps: 2000  # Number of steps between checkpoints
 val_freq: 2000  # Frequency of validation

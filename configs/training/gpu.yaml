@@ -1,13 +1,13 @@
 compute_environment: LOCAL_MACHINE
 debug: True
 deepspeed_config:
-  offload_optimizer_device: none
+  offload_optimizer_device: cpu # none
   offload_param_device: none
   zero3_init_flag: False
   zero_stage: 2
-  
+
 distributed_type: DEEPSPEED
-downcast_bf16: 'no'
+downcast_bf16: 'yes' # 'no'
 gpu_ids: "0" # modify this according to your GPU number
 machine_rank: 0
 main_training_function: main

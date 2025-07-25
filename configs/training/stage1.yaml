@@ -81,7 +81,7 @@ solver:
   adam_weight_decay: 1.0e-2  # Weight decay for Adam optimizer
   adam_epsilon: 1.0e-8  # Epsilon for Adam optimizer
 
-total_limit: 10  # Maximum number of checkpoints to keep
+total_limit: 5  # Maximum number of checkpoints to keep
 save_model_epoch_interval: 5000 # 250000  # Interval between model saves
 checkpointing_steps: 2000 # 10000 # Number of steps between checkpoints
 val_freq: 500 # 2000  # Frequency of validation

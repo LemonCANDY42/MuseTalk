@@ -20,6 +20,8 @@ from accelerate.utils import DistributedDataParallelKwargs
 from datetime import datetime
 from datetime import timedelta
 
+import gc
+
 from diffusers.utils import check_min_version
 from einops import rearrange
 from omegaconf import OmegaConf
@@ -56,6 +58,7 @@ def main(cfg):
     process_group_kwargs = InitProcessGroupKwargs(
         timeout=timedelta(seconds=5400))
     accelerator = Accelerator(
+        mixed_precision=cfg.solver.mixed_precision,
         gradient_accumulation_steps=cfg.solver.gradient_accumulation_steps,
         log_with=["tensorboard", LoggerType.TENSORBOARD],
         project_dir=os.path.join(save_dir, "./tensorboard"),
@@ -81,7 +84,7 @@ def main(cfg):
         print('cfg.seed', cfg.seed, accelerator.process_index)
         seed_everything(cfg.seed + accelerator.process_index)
 
-    weight_dtype = torch.float32
+    weight_dtype = torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.float16 if cfg.solver.mixed_precision == 'fp16' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
 
     model_dict = initialize_models_and_optimizers(cfg, accelerator, weight_dtype)
     dataloader_dict = initialize_dataloaders(cfg)
@@ -217,7 +220,10 @@ def main(cfg):
                 
                 # Process sync loss if enabled
                 if cfg.loss_params.sync_loss > 0:
-                    mels = batch['mel']
+                    mels = batch['mel'].to(weight_dtype).to(
+                    accelerator.device, 
+                    non_blocking=True
+                )
                     # Prepare frames for latentsync (combine channels and frames)
                     gt_frames = rearrange(pixel_values, 'b f c h w-> b (f c) h w')
                     # Use lower half of face for latentsync
@@ -412,6 +418,8 @@ def main(cfg):
                     pred_frames, 
                     syncnet, 
                     adapted_weight,
+                    weight_dtype,
+                    accelerator,
                     frames_left_index=frames_left_index,
                     frames_right_index=frames_right_index,
                 )
@@ -519,6 +527,10 @@ def main(cfg):
                 # Save checkpoint if needed
                 if global_step % cfg.checkpointing_steps == 0:
                     save_path = os.path.join(save_dir, f"checkpoint-{global_step}")
+
+                    gc.collect()
+                    print("<<<<<<<<<    gc.collect() called    >>>>>>>>>")
+                    
                     try:
                         start_time = time.time()
                         if accelerator.is_main_process:
