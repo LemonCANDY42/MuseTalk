@@ -151,9 +151,9 @@ def convert_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
             if org_vid_path != dst_vid_path:
                 if has_nvenc:
                     # 如果有NVENC，将任务分配给NVENC和CPU
-                    if idx % 2 == 0:  # 偶数索引使用NVENC
+                    if idx % 5 == 0:  # 5的倍数索引使用NVENC
                         nvenc_tasks.append((idx, vid, "nvenc"))
-                    else:  # 奇数索引使用CPU
+                    else:  # 其他索引使用CPU
                         cpu_tasks.append((idx, vid, "cpu"))
                 else:
                     # 只有CPU编码
@@ -175,7 +175,7 @@ def convert_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     
     max_cpu_workers = max(1, max_cpu_workers)  # 至少1个worker
     
-    print(f"使用 {max_cpu_workers} 个CPU编码进程 (每个使用8线程)")
+    print(f"使用 {max_cpu_workers} 个CPU编码进程")
     
     if has_nvenc:
         print("使用NVIDIA硬件编码器并行处理")

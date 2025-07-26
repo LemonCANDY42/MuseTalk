@@ -1,21 +1,10 @@
 clip_len_second: 30 # the length of the video clip
 video_root_raw: "./dataset/HDTF/source/" # the path of the original video
-val_list_hdtf:
-  - "19"
-  - "20"
-  - "39"
-  - "40"
-  - "67"
-  - "68"
-  - "69"
-  - "70"
-  - "128"
-  - "129"
-  - "130"
-  - "131"
-  - "132"
-  - "133"
+val_list_hdtf: # 无声:律师:7-25:7-26 = 1:1:1:1
   - "134"
+  - "284"
+  - "460"
+  - "566"
 
 # following dir will be automatically generated
 video_root_25fps: "./dataset/HDTF/video_root_25fps/"
