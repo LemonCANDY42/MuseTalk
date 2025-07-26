@@ -343,6 +343,11 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
                 ]
                 duration_result = subprocess.run(duration_command, capture_output=True, text=True, check=True)
                 duration = float(duration_result.stdout.strip())
+
+                # 如果时长小于1s 
+                if duration < 1:
+                    print(f"视频时长{duration},小于0.5秒，跳过: {vid}")
+                    return
                 
                 # 创建带静音音轨的临时视频文件
                 temp_video_path = video_path.replace('.mp4', '_with_audio.mp4')
