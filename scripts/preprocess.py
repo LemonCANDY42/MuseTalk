@@ -344,8 +344,8 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
                 duration_result = subprocess.run(duration_command, capture_output=True, text=True, check=True)
                 duration = float(duration_result.stdout.strip())
 
-                # 如果时长小于1s 
-                if duration < 1:
+                # 如果时长小于0.5s 
+                if duration < 0.5:
                     print(f"视频时长{duration},小于0.5秒，跳过: {vid}")
                     return
                 
@@ -698,7 +698,7 @@ def main(cfg):
     # 2. Segment videos into 30-second clips
     segment_video(cfg.video_root_25fps, cfg.video_audio_clip_root, vid_list, segment_duration=cfg.clip_len_second)
     
-    # # # # 3. Extract audio
+    # 3. Extract audio
     clip_vid_list = os.listdir(cfg.video_audio_clip_root)
     extract_audio(cfg.video_audio_clip_root, cfg.video_audio_clip_root, clip_vid_list)
 
