@@ -4,7 +4,7 @@ unet_sub_folder: musetalkV15  # Subfolder name for UNet model
 random_init_unet: False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
 pretrained_model_name_or_path: "./models"  # "./models"   # Path to pretrained models
-unet_model_name: "unet.pth" # "unet.pth"
+unet_model_name: "unet-2025-7-27-stage1-4000.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
 vae_type: "sd-vae"  # Type of VAE model to use
@@ -72,7 +72,7 @@ solver:
   # Learning rate parameters
   learning_rate: 2.0e-5  # Base learning rate
   scale_lr: False  # Whether to scale learning rate
-  lr_warmup_steps: 1000  # Number of warmup steps for learning rate
+  lr_warmup_steps: 0 # 1000  # Number of warmup steps for learning rate
   lr_scheduler: "linear"   # Type of learning rate scheduler
   # Optimizer parameters
   use_8bit_adam: False  # Whether to use 8-bit Adam optimizer
@@ -83,7 +83,7 @@ solver:
 
 total_limit: 5  # Maximum number of checkpoints to keep
 save_model_epoch_interval: 50000 # 250000  # Interval between model saves
-checkpointing_steps: 2000 # 10000 # Number of steps between checkpoints
+checkpointing_steps: 1000 # 10000 # Number of steps between checkpoints
 val_freq: 2000 # 2000  # Frequency of validation
 
 seed: 41  # Random seed for reproducibility
