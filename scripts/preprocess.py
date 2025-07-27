@@ -520,6 +520,8 @@ def process_single_video_worker(args):
         cap = decord.VideoReader(vid_path, fault_tol=1)
         total_frames = len(cap)
         
+        face_height_all,face_width_all = 0,0
+
         # 逐帧处理，使用torch.no_grad()优化内存
         for frame_idx in range(total_frames):
             frame = cap[frame_idx]
@@ -547,12 +549,16 @@ def process_single_video_worker(args):
                     pts = []
                     break
                 
-                if frame_idx == 0:
-                    x1, y1, x2, y2 = bbox
-                    face_height, face_width = y2 - y1, x2 - x1
-                
+                # 取平均宽高
+                x1, y1, x2, y2 = bbox
+                face_height_all += y2 - y1
+                face_width_all += x2 - x1                
+
                 total_pts_list.append(pts)
                 total_bbox_list.append(bbox)
+
+        face_height = int(face_height_all / total_frames)
+        face_width = int(face_width_all / total_frames)
                 
         torch.cuda.empty_cache()
         # 释放视频读取器
