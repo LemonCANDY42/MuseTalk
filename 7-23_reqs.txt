@@ -1,5 +1,5 @@
 absl-py==2.3.1
-accelerate==0.28.0
+accelerate==1.9.0
 addict==2.4.0
 aiofiles==24.1.0
 aliyun-python-sdk-core==2.16.0
@@ -174,6 +174,7 @@ tomli==2.2.1
 tomlkit==0.13.3
 torch==2.7.1+cu128
 torchaudio==2.7.1+cu128
+torchcodec==0.5.0
 torchvision==0.22.1+cu128
 tqdm==4.65.2
 transformer_engine==2.5.0

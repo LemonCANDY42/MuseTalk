@@ -49,7 +49,6 @@ class UNet():
             self.model = self.model.bfloat16()
         else:
             pass
-        
         self.model.to(self.device)
     
 if __name__ == "__main__":

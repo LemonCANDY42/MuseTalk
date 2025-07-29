@@ -192,6 +192,7 @@ def main(cfg):
 
         t_data_start = time.time()
         for step, batch in enumerate(dataloader_dict['train_dataloader']):
+            pass
             t_data = time.time() - t_data_start
             t_model_start = time.time()
 
@@ -528,8 +529,8 @@ def main(cfg):
                 if global_step % cfg.checkpointing_steps == 0:
                     save_path = os.path.join(save_dir, f"checkpoint-{global_step}")
 
-                    gc.collect()
-                    print("<<<<<<<<<    gc.collect() called    >>>>>>>>>")
+                    # gc.collect()
+                    # print("<<<<<<<<<    gc.collect() called    >>>>>>>>>")
                     
                     try:
                         start_time = time.time()

@@ -10,11 +10,15 @@ import librosa
 import time
 import json
 import math
-from decord import AudioReader, VideoReader
-from decord.ndarray import cpu
+from decord import AudioReader # , VideoReader
+# from decord.ndarray import cpu
+from torchcodec.decoders import VideoDecoder
+from einops import rearrange
 
 from musetalk.data.sample_method import get_src_idx, shift_landmarks_to_face_coordinates, resize_landmark 
 from musetalk.data import audio 
+
+import gc
 
 syncnet_mel_step_size = math.ceil(16 / 5 * 16)  # latentsync
 
@@ -59,7 +63,7 @@ class FaceDataset(Dataset):
         self.T = cfg['T']
         self.sample_method = cfg['sample_method']
         self.top_k_ratio = cfg['top_k_ratio']
-        self.max_attempts = 200
+        self.max_attempts = 1000 # 200
         self.padding_pixel_mouth = cfg['padding_pixel_mouth']
         
         # Cropping related parameters
@@ -250,6 +254,7 @@ class FaceDataset(Dataset):
         """
         ar = AudioReader(video_path, sample_rate=16000)
         original_mel = audio.melspectrogram(ar[:].asnumpy().squeeze(0))
+        del ar
         return original_mel.T
 
     def get_resized_mouth_mask(
@@ -328,7 +333,7 @@ class FaceDataset(Dataset):
                 continue
 
             try:
-                cap = VideoReader(video_path, fault_tol=1, ctx=cpu(0))
+                cap = VideoDecoder(video_path, device='cpu',num_ffmpeg_threads=12)
                 total_frames = len(cap)
                 assert total_frames == len(landmark_list)
                 assert total_frames == len(bbox_list)
@@ -378,11 +383,13 @@ class FaceDataset(Dataset):
 
             ref_face_valid_flag = True
             extra_margin = self.generate_random_value()
-            
-            # Get reference images
+
             ref_imgs = []
             for src_idx in src_idx_list:
-                imSrc = Image.fromarray(cap[src_idx].asnumpy())
+                # decord会导致内存泄露
+                images_tensor = cap[src_idx]
+                images = rearrange(images_tensor, 'c h w -> h w c').numpy()
+                imSrc = Image.fromarray(images)
                 bbox_s = bbox_list_union[src_idx]
                 imSrc, _, _ = self.crop_resize_img(
                     imSrc,
@@ -406,9 +413,12 @@ class FaceDataset(Dataset):
             face_masks = []
             face_mask_valid = True
             target_face_valid_flag = True
-            
+
             for drive_idx in drive_idx_list:
-                imSameID = Image.fromarray(cap[drive_idx].asnumpy())
+                # decord会导致内存泄露
+                images_tensor = cap[drive_idx]
+                images = rearrange(images_tensor, 'c h w -> h w c').numpy()
+                imSameID = Image.fromarray(images)
                 bbox_s = bbox_list_union[drive_idx]
                 imSameID, _ , mask_scaled_factor = self.crop_resize_img(
                     imSameID, 
@@ -455,7 +465,6 @@ class FaceDataset(Dataset):
             audio_offset = drive_idx_list[0]
             audio_step = step
             fps = 25.0 / step
-
             try:
                 audio_feature, audio_offset = self.get_audio_file(wav_path, audio_offset)
                 _, audio_offset = self.get_audio_file_mel(wav_path, audio_offset)
@@ -490,7 +499,8 @@ class FaceDataset(Dataset):
                 wav_path=wav_path,
                 fps=fps,
             )
-
+            # del cap  # Free memory
+            # gc.collect()  # Collect garbage
             return sample
 
         raise ValueError("Unable to find a valid sample after maximum attempts.")

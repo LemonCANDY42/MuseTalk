@@ -58,10 +58,11 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
         'trainable_params': None
     }
     
+    # 是否使用不同精度
     model_dict['vae'] = AutoencoderKL.from_pretrained(
         cfg.pretrained_model_name_or_path,
         subfolder=cfg.vae_type,
-        torch_dtype=torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.float16 if cfg.solver.mixed_precision == 'fp16' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
+        torch_dtype=torch.float16  # if cfg.solver.mixed_precision == 'fp16' else torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
     )
 
     unet_config_file = os.path.join(
@@ -90,7 +91,8 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
 
     model_dict['net'] = Net(model_dict['unet'])
 
-    model_dict['wav2vec'] = WhisperModel.from_pretrained(cfg.whisper_path,torch_dtype=torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.float16 if cfg.solver.mixed_precision == 'fp16' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
+    # 是否使用不同精度
+    model_dict['wav2vec'] = WhisperModel.from_pretrained(cfg.whisper_path,torch_dtype=torch.float16  # if cfg.solver.mixed_precision == 'fp16' else torch.float32 if cfg.solver.mixed_precision == 'fp32' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else 'auto'
                                                          ).to(
         device="cuda", dtype=weight_dtype).eval()
     model_dict['wav2vec'].requires_grad_(False)
@@ -175,6 +177,7 @@ def initialize_dataloaders(cfg):
         shuffle=True,
         num_workers=cfg.data.num_workers,
         pin_memory=True,  
+        persistent_workers=True,  # 使用持久化worker以提高数据加载效率
     )
     
     dataloader_dict['val_dataset'] = PortraitDataset(cfg={
