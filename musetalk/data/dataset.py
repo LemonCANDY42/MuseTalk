@@ -10,9 +10,10 @@ import librosa
 import time
 import json
 import math
-from decord import AudioReader # , VideoReader
+# decord会导致内存泄露
+# from decord import AudioReader # , VideoReader
 # from decord.ndarray import cpu
-from torchcodec.decoders import VideoDecoder
+from torchcodec.decoders import VideoDecoder, AudioDecoder
 from einops import rearrange
 
 from musetalk.data.sample_method import get_src_idx, shift_landmarks_to_face_coordinates, resize_landmark 
@@ -252,9 +253,18 @@ class FaceDataset(Dataset):
         Returns:
             ndarray: SyncNet input features
         """
-        ar = AudioReader(video_path, sample_rate=16000)
-        original_mel = audio.melspectrogram(ar[:].asnumpy().squeeze(0))
-        del ar
+        # decord 反复调用会导致内存泄露
+        # ar = AudioReader(video_path, sample_rate=16000)
+        # audio_samples = ar[:].asnumpy().squeeze(0)
+        
+        # Tensor
+        audio_samples = AudioDecoder(video_path, sample_rate=16000).get_all_samples().data 
+        # 手动混合为单声道
+        if audio_samples.shape[0] > 1:  # 检查是否为多声道
+            audio_samples = audio_samples.mean(dim=0, keepdim=True)
+            
+        audio_samples = audio_samples.numpy().squeeze(0)              
+        original_mel = audio.melspectrogram(audio_samples)
         return original_mel.T
 
     def get_resized_mouth_mask(
@@ -500,7 +510,7 @@ class FaceDataset(Dataset):
                 fps=fps,
             )
             # del cap  # Free memory
-            # gc.collect()  # Collect garbage
+            gc.collect()  # Collect garbage
             return sample
 
         raise ValueError("Unable to find a valid sample after maximum attempts.")
