@@ -298,16 +298,13 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     
     # 确定CPU并行数量
     cpu_cores = psutil.cpu_count(logical=True)  # 逻辑核心数
-    initial_cpu_usage = get_cpu_usage()
     
-    # 根据CPU使用率动态调整并行数
-    if initial_cpu_usage < 30:  # CPU使用率低于30%
+    # 根据CPU逻辑核心数调整并行数
+    if cpu_cores < 24:  # CPU使用率低于30%
         max_workers = min(cpu_cores // 8, len(mp4_files))  # 每个任务8线程
-    elif initial_cpu_usage < 60:  # CPU使用率30-60%
+    else:
         max_workers = min(cpu_cores // 12, len(mp4_files))
-    else:  # CPU使用率高于60%
-        max_workers = 1
-    
+
     max_workers = max(1, max_workers)  # 至少1个worker
     
     print(f"使用 {max_workers} 个CPU进程并行提取音频 (每个使用8线程)")
