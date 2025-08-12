@@ -19,15 +19,19 @@ import psutil
 import multiprocessing as mp
 import gc
 
+from pathlib import Path
+
 def get_cpu_usage():
     """获取当前CPU使用率"""
     return psutil.cpu_percent(interval=1)
+
+FFMPEG_PATH = "/usr/local/bin/ffmpeg"
 
 def has_nvidia_encoder():
     """检查系统是否支持NVIDIA硬件编码器（如h264_nvenc）"""
     try:
         # 检查ffmpeg是否支持nvenc
-        result = subprocess.run(["ffmpeg", "-hide_banner", "-codecs"], 
+        result = subprocess.run([FFMPEG_PATH, "-hide_banner", "-codecs"], 
                               capture_output=True, text=True)
         return "h264_nvenc" in result.stdout
     except:
@@ -36,17 +40,17 @@ def has_nvidia_encoder():
 
 def fast_check_ffmpeg():
     try:
-        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+        subprocess.run([FFMPEG_PATH, "-version"], capture_output=True, check=True)
         return True
     except:
         return False
 
-ffmpeg_path = "./ffmpeg-4.4-amd64-static/"
+# ffmpeg_path = "./ffmpeg-4.4-amd64-static/"
 if not fast_check_ffmpeg():
     print("Adding ffmpeg to PATH")
     # Choose path separator based on operating system
     path_separator = ';' if sys.platform == 'win32' else ':'
-    os.environ["PATH"] = f"{args.ffmpeg_path}{path_separator}{os.environ['PATH']}"
+    os.environ["PATH"] = f"{FFMPEG_PATH}{path_separator}{os.environ['PATH']}"
     if not fast_check_ffmpeg():
         print("Warning: Unable to find ffmpeg, please ensure ffmpeg is properly installed")
 
@@ -114,8 +118,10 @@ def convert_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
         """转换单个视频文件"""
         idx, vid, codec_type = vid_info
         if vid.endswith('.mp4'):
-            org_vid_path = os.path.join(org_path, vid)
-            dst_vid_path = os.path.join(dst_path, vid)
+            # org_vid_path = os.path.join(org_path, vid)
+            org_vid_path = Path(org_path)/vid
+            # dst_vid_path = os.path.join(dst_path, vid)
+            dst_vid_path = Path(dst_path)/vid
                 
             if org_vid_path != dst_vid_path:
                 if codec_type == "nvenc":
@@ -124,14 +130,74 @@ def convert_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
                 else:
                     video_codec = "libx264"
                     threads_param = ["-threads", "8"]  # CPU编码使用8线程
+
+                # # 1. 获取原始视频分辨率
+                # probe_cmd = [
+                #     'ffprobe',
+                #     '-v', 'error',
+                #     '-select_streams', 'v:0',
+                #     '-show_entries', 'stream=width,height',
+                #     '-of', 'json',
+                #     org_vid_path
+                # ]
+                # probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
+                # metadata = json.loads(probe_result.stdout)
+                # width = int(metadata['streams'][0]['width'])
+                # height = int(metadata['streams'][0]['height'])
+
+                # # 根据宽度动态设置目标分辨率，先判断竖屏还是横屏，然后保持原始比例，每个比例在不同区间内resize到特定分辨率，分别是1920*1080,1280*720,1080*1920,720*1280,540*960,960*540
+                # direction = "horizontal" if width > height else "vertical"
+                # avg_rate = ""
+                # maxrate = ""
+                # bufsize = ""
+                # if direction == "horizontal":
+                #     if width >= 1920:
+                #         # target_resolution = "1920:1080"
+                #         avg_rate = "1500K"
+                #         maxrate = "2000K"
+                #         bufsize = "3000K"
+                #     elif width >= 1280:
+                #         # target_resolution = "1280:720"
+                #         avg_rate = "900K"
+                #         maxrate = "1200K"
+                #         bufsize = "2000K"
+                #     else:
+                #         # target_resolution = "960:540"
+                #         avg_rate = "650K"
+                #         maxrate = "900K"
+                #         bufsize = "1100K"
+
+                # else:
+                #     if height >= 1920:
+                #         # target_resolution = "1080:1920"
+                #         avg_rate = "1500K"
+                #         maxrate = "2000K"
+                #         bufsize = "3000K"
+                #     elif height >= 1280:
+                #         # target_resolution = "720:1280"
+                #         avg_rate = "900K"
+                #         maxrate = "1200K"
+                #         bufsize = "2000K"
+                #     else:
+                #         # target_resolution = "540:960"
+                #         avg_rate = "650K"
+                #         maxrate = "900K"
+                #         bufsize = "1100K"
+
                 
                 cmd = [
-                    "ffmpeg", "-hide_banner", "-y", "-i", org_vid_path, 
+                    FFMPEG_PATH, "-hide_banner", "-y", "-i", org_vid_path, 
                     "-r", "25", "-crf", "15", "-c:v", video_codec,
+                    # '-b:v', avg_rate, # '0' 让编码器自动决定码率
+                    # '-maxrate', maxrate,  # 最大码率
+                    # '-bufsize', bufsize,  # 自动缓冲区大小,一般是2倍最大码率
                     "-pix_fmt", "yuv420p"
                 ] + threads_param + [dst_vid_path]
                 
-                subprocess.run(cmd, check=True)
+                if not os.path.exists(dst_vid_path):
+                    subprocess.run(cmd, check=True)
+                else:
+                    print(f"convert_video跳过已存在的文件: {dst_vid_path}")
                 
                 if idx % 100 == 0:
                     print(f"### {idx} 个视频已转换，使用 {codec_type} 编码器 ###")
@@ -145,8 +211,10 @@ def convert_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
     
     for idx, vid in enumerate(vid_list):
         if vid.endswith('.mp4'):
-            org_vid_path = os.path.join(org_path, vid)
-            dst_vid_path = os.path.join(dst_path, vid)
+            # org_vid_path = os.path.join(org_path, vid)
+            org_vid_path = Path(org_path)/vid
+            # dst_vid_path = os.path.join(dst_path, vid)
+            dst_vid_path = Path(dst_path)/vid
             
             if org_vid_path != dst_vid_path:
                 if has_nvenc:
@@ -249,19 +317,24 @@ def segment_video(org_path: str, dst_path: str, vid_list: List[str], segment_dur
     
     def segment_single_video(vid):
         """分割单个视频文件"""
-        input_file = os.path.join(org_path, vid)
+        # input_file = os.path.join(org_path, vid)
+        input_file = Path(org_path)/vid
         original_filename = os.path.basename(input_file)
+        output_file = os.path.join(dst_path, f'clip%03d_{original_filename}')
 
         command = [
             'ffmpeg', '-threads', '8', '-i', input_file, '-c', 'copy', '-map', '0',
             '-segment_time', str(segment_duration), '-f', 'segment',
             '-reset_timestamps', '1',
-            os.path.join(dst_path, f'clip%03d_{original_filename}')
+            output_file
         ]
 
         try:
-            subprocess.run(command, check=True)
-            print(f"成功分割视频: {vid}")
+            if not os.path.exists(output_file):
+                subprocess.run(command, check=True)
+                print(f"成功分割视频: {vid}")
+            else:
+                print(f"segment_video跳过已存在的文件: {vid}")
         except subprocess.CalledProcessError as e:
             print(f"分割视频 {vid} 时出现错误: {e}")
     
@@ -327,8 +400,11 @@ def extract_audio(org_path: str, dst_path: str, vid_list: List[str]) -> None:
         ]
         
         try:
-            subprocess.run(command, check=True, capture_output=True)
-            print(f"音频已保存到: {audio_output_path}")
+            if not os.path.exists(audio_output_path):
+                subprocess.run(command, check=True, capture_output=True)
+                print(f"音频已保存到: {audio_output_path}")
+            else:
+                print(f"extract_audio跳过已存在的文件: {audio_output_path}")
         except subprocess.CalledProcessError as e:
             print(f"从视频 {vid} 提取音频失败，尝试为视频添加静音音轨并重新提取...")
             
@@ -437,7 +513,8 @@ def save_list_to_file(file_path: str, data_list: List[str]) -> None:
     Returns:
     None
     """
-    with open(file_path, 'w') as file:
+    # 源文件如果存在则继续追加
+    with open(file_path, 'a+') as file:
         for item in data_list:
             file.write(f"{item}\n")
 
@@ -680,14 +757,14 @@ def analyze_video(org_path: str, dst_path: str, vid_list: List[str]) -> None:
 
 def main(cfg):
     # Ensure all necessary directories exist
-    os.makedirs(cfg.video_root_25fps, exist_ok=True)
+    # os.makedirs(cfg.video_root_25fps, exist_ok=True)
     os.makedirs(cfg.video_audio_clip_root, exist_ok=True)
     os.makedirs(cfg.meta_root, exist_ok=True)
     os.makedirs(os.path.dirname(cfg.video_file_list), exist_ok=True)
     os.makedirs(os.path.dirname(cfg.video_clip_file_list_train), exist_ok=True)
     os.makedirs(os.path.dirname(cfg.video_clip_file_list_val), exist_ok=True)
 
-    vid_list = os.listdir(cfg.video_root_raw)
+    vid_list = os.listdir(Path(cfg.video_root_raw))
     sorted_vid_list = sorted(vid_list)
  
     # Save video file list
