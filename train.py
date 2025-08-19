@@ -303,14 +303,14 @@ def main(cfg):
                     b=bsz
                 )
 
-            # Apply reference dropout (currently inactive)
-            dropout = nn.Dropout(p=cfg.ref_dropout_rate)
-            ref_latents = dropout(ref_latents)
+                # Apply reference dropout (currently inactive)
+                dropout = nn.Dropout(p=cfg.ref_dropout_rate)
+                ref_latents = dropout(ref_latents)
 
-            # Prepare model inputs
-            input_latents = torch.cat([masked_latents, ref_latents], dim=1)
-            input_latents = input_latents.to(weight_dtype)
-            timesteps = torch.tensor([0], device=input_latents.device)
+                # Prepare model inputs
+                input_latents = torch.cat([masked_latents, ref_latents], dim=1)
+                input_latents = input_latents.to(weight_dtype)
+                timesteps = torch.tensor([0], device=input_latents.device)
 
             # Forward pass
             latents_pred = model_dict['net'](
@@ -350,7 +350,7 @@ def main(cfg):
                     x_vgg = vgg_IN(pyramide_generated['prediction_' + str(scale)])
                     y_vgg = vgg_IN(pyramide_real['prediction_' + str(scale)])
                     for i, weight in enumerate(cfg.loss_params.vgg_layer_weight):
-                        value = torch.abs(x_vgg[i] - y_vgg[i].detach()).mean()
+                        value = torch.abs(x_vgg[i].detach() - y_vgg[i].detach()).mean()
                         loss_IN += weight * value
                 loss_IN /= sum(cfg.loss_params.vgg_layer_weight)
                 loss += loss_IN * cfg.loss_params.vgg_loss * adapted_weight

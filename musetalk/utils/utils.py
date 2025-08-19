@@ -17,6 +17,7 @@ def load_all_model(
     vae_type="sd-vae",
     unet_config=os.path.join("models", "musetalkV15", "musetalk.json"),
     device=None,
+    model_type="bfloat16"
 ):
     vae = VAE(
         model_path = os.path.join("models", vae_type),
@@ -25,6 +26,7 @@ def load_all_model(
     unet = UNet(
         unet_config=unet_config,
         model_path=unet_model_path,
+        model_type=model_type,
         device=device
     )
     pe = PositionalEncoding(d_model=384)
