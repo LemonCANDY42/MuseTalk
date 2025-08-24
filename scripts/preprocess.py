@@ -513,12 +513,12 @@ def save_list_to_file(file_path: str, data_list: List[str]) -> None:
     Returns:
     None
     """
-    # 源文件如果存在则继续追加
-    with open(file_path, 'a+') as file:
+    # 源文件如果存在则覆盖，因为是从头读取并写入
+    with open(file_path, 'w') as file:
         for item in data_list:
             file.write(f"{item}\n")
 
-def generate_train_list(cfg):
+def generate_train_list(cfg):   
     train_file_path = cfg.video_clip_file_list_train
     val_file_path = cfg.video_clip_file_list_val
     val_list_hdtf = cfg.val_list_hdtf
