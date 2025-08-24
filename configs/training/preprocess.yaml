@@ -1,5 +1,5 @@
 clip_len_second: 30 # the length of the video clip
-video_root_raw: "./dataset/HDTF/source/" # the path of the original video
+video_root_raw: "/home/ylf/dataset/8-11_f2/bilibili/" # the path of the original video:"./dataset/HDTF/source/"
 val_list_hdtf: # 无声:律师:7-25:7-26 = 1:1:1:1
   - "134"
   - "284"
@@ -7,7 +7,7 @@ val_list_hdtf: # 无声:律师:7-25:7-26 = 1:1:1:1
   - "566"
 
 # following dir will be automatically generated
-video_root_25fps: "./dataset/HDTF/video_root_25fps/"
+video_root_25fps: "/home/ylf/dataset/8-11_f2/8-12_video_root_25fps/" #"./dataset/HDTF/video_root_25fps/"
 video_file_list: "./dataset/HDTF/video_file_list.txt"
 video_audio_clip_root:  "./dataset/HDTF/video_audio_clip_root/"
 meta_root: "./dataset/HDTF/meta/"
