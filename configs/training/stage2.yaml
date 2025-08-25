@@ -4,10 +4,10 @@ unet_sub_folder: musetalkV15  # Subfolder name for UNet model
 random_init_unet: False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
 pretrained_model_name_or_path: "./models"  # Path to pretrained models
-unet_model_name: "unet-8-20-stage2-50000.pth" # "unet.pth"
+unet_model_name: "unet-8-25-stage1-60000.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
-vae_type: "sdxl-vae-fp16-fix" # "sd-vae"  # Type of VAE model to use
+vae_type: "sd-vae" # "sd-vae"  # Type of VAE model to use
 # Validation parameters
 num_images_to_keep: 8  # Number of validation images to keep
 ref_dropout_rate: 0  # Dropout rate for reference images
@@ -24,7 +24,8 @@ data:
   train_bs: 1 # 1  # Training batch size (actual batch size is train_bs*n_sample_frames)
   image_size: 256  # Size of input images
   n_sample_frames: 16 # 16 # Number of frames to sample per batch
-  num_workers: 8 # 8  # Number of data loading workers
+  num_workers: 16 # 8  # Number of data loading workers
+  prefetch_factor: 4  # Number of batches to prefetch
   audio_padding_length_left: 2  # Left padding length for audio features
   audio_padding_length_right: 2  # Right padding length for audio features
   sample_method: pose_similarity_and_mouth_dissimilarity  # Method for sampling frames
@@ -33,7 +34,8 @@ data:
   min_face_size: 200 # 200 # Minimum face size in pixels
 
 loss_params:
-  l1_loss: 1.0 # 1.0  # Weight for L1 loss
+  l1_loss: 0.5  # Weight for L1 loss
+  l2_loss: 2  # Weight for L2 loss
   vgg_loss: 0.01 # 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
   pyramid_scale: [1, 0.5, 0.25, 0.125]  # Scales for image pyramid
@@ -59,7 +61,7 @@ discriminator_train_params:
   patch_size: 1  # Size of patches for discriminator
   betas: [0.5, 0.999]  # Beta parameters for Adam optimizer
   epochs: 10000  # Number of training epochs
-  start_gan: 200 # 1000  # Step to start GAN training
+  start_gan: 500 # 1000  # Step to start GAN training
 
 solver:
   gradient_accumulation_steps: 8 # 8  # Number of steps for gradient accumulation
@@ -67,10 +69,10 @@ solver:
   mixed_precision: 'fp16' # 'bf16' 'fp32' # Precision mode for training
   enable_xformers_memory_efficient_attention: True  # Whether to use memory efficient attention
   gradient_checkpointing: True  # Whether to use gradient checkpointing
-  max_train_steps: 250000 # 250000  # Maximum number of training steps
+  max_train_steps: 500000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 4.0e-6 # 5.0e-6 # Base learning rate
+  learning_rate: 2.0e-6 # 5.0e-6 # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 500 # 1000 # Number of warmup steps for learning rate
   lr_scheduler: "linear" # "constant_with_warmup" # "linear"  # Type of learning rate scheduler
@@ -86,5 +88,5 @@ save_model_epoch_interval: 50000 # 250000 # Interval between model saves
 checkpointing_steps: 10000  # Number of steps between checkpoints
 val_freq: 5000  # Frequency of validation
 
-seed: 1247  # Random seed for reproducibility
+seed: 37  # Random seed for reproducibility
 

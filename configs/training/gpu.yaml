@@ -1,10 +1,13 @@
 compute_environment: LOCAL_MACHINE
 debug: True
 deepspeed_config:
-  offload_optimizer_device: none # none / stage2:cpu
+  offload_optimizer_device: cpu # none / stage2:cpu
   offload_param_device: none
   zero3_init_flag: False
-  zero_stage: 2
+  zero_stage: 2 # 2
+
+  # stage2_prefetch_bucket_size: 0
+  # stage3_prefetch_bucket_size: 0
 
 distributed_type: DEEPSPEED
 downcast_bf16: 'no' # 'no'

@@ -176,6 +176,7 @@ def initialize_dataloaders(cfg):
         batch_size=cfg.data.train_bs,
         shuffle=True,
         num_workers=cfg.data.num_workers,
+        prefetch_factor=cfg.data.prefetch_factor,  # 每个worker预取prefetch_factor个批次的数据
         pin_memory=True,  
         persistent_workers=True,  # 使用持久化worker以提高数据加载效率
     )
@@ -211,6 +212,7 @@ def initialize_loss_functions(cfg, accelerator, scheduler_max_steps):
     """Initialize loss functions and discriminators"""
     loss_dict = {
         'L1_loss': nn.L1Loss(reduction='mean'),
+        'L2_loss': nn.MSELoss(reduction='mean'),
         'discriminator': None,
         'mouth_discriminator': None,
         'optimizer_D': None,
@@ -272,7 +274,7 @@ def initialize_syncnet(cfg, accelerator, weight_dtype):
         checkpoint = torch.load(
             syncnet_config.ckpt.inference_ckpt_path, map_location=accelerator.device)
         syncnet.load_state_dict(checkpoint["state_dict"])
-        syncnet.to(dtype=weight_dtype)
+        syncnet.to(dtype=torch.float32) #  if cfg.solver.mixed_precision == 'fp32' else torch.bfloat16
         syncnet.requires_grad_(False)
         syncnet.eval()
         return syncnet
