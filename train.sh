@@ -31,12 +31,12 @@ echo "Starting $STAGE training..."
 
 if [ "$USE_SCALENE" = "true" ]; then
     echo "Using Scalene for memory profiling"
-    accelerate launch --config_file ./configs/training/gpu.yaml \
+    accelerate launch --config_file ./configs/training/default_config.yaml \
             --main_process_port 29502  \
             --no_python scalene --gpu --memory  --profile-exclude lib/python3 --html --outfile train_profile.html --- train.py --config ./configs/training/$STAGE.yaml
 else
     echo "Using Accelerate for training"
-    accelerate launch --config_file ./configs/training/gpu.yaml \
+    accelerate launch --config_file ./configs/training/default_config.yaml \
                       --main_process_port 29502 \
                       train.py --config ./configs/training/$STAGE.yaml
 fi

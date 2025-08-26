@@ -326,8 +326,21 @@ def main(cfg):
             image_pred = image_pred.float()
             frames = frames.float()
             
+            alpha = 1/4
+            beta = 3/4 
+
+            # 像素空间进行下半张脸对比
+            # 取上半张脸
+            image_high_pred_half = image_pred[:, :, :image_pred.shape[2]//2, :]
+            image_high_gt_half = frames[:, :, :frames.shape[2]//2, :]
+            # 取下半张脸
+            image_low_pred_half = image_pred[:, :, image_pred.shape[2]//2:, :]
+            image_low_gt_half = frames[:, :, frames.shape[2]//2:, :]
+
             # Calculate L1 loss
-            l1_loss = loss_dict['L1_loss'](frames, image_pred)
+            l1_loss_high_half = loss_dict['L1_loss'](image_high_gt_half, image_high_pred_half)
+            l1_loss_low_half = loss_dict['L1_loss'](image_low_pred_half, image_low_gt_half)
+            l1_loss = alpha * l1_loss_high_half + beta * l1_loss_low_half
             l1_loss_accum += l1_loss.item()
             loss = cfg.loss_params.l1_loss * l1_loss * adapted_weight
             

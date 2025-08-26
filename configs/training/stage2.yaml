@@ -24,7 +24,7 @@ data:
   train_bs: 1 # 1  # Training batch size (actual batch size is train_bs*n_sample_frames)
   image_size: 256  # Size of input images
   n_sample_frames: 16 # 16 # Number of frames to sample per batch
-  num_workers: 16 # 8  # Number of data loading workers
+  num_workers: 12 # 8  # Number of data loading workers
   prefetch_factor: 4  # Number of batches to prefetch
   audio_padding_length_left: 2  # Left padding length for audio features
   audio_padding_length_right: 2  # Right padding length for audio features
@@ -35,14 +35,14 @@ data:
 
 loss_params:
   use_smooth_l1_loss: True
-  l1_loss: 1  # Weight for L1 loss
+  l1_loss: 5 # 1 # Weight for L1 loss
   l2_loss: 0  # Weight for L2 loss
   vgg_loss: 0.01 # 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
   pyramid_scale: [1, 0.5, 0.25, 0.125]  # Scales for image pyramid
   gan_loss: 0.015 # 0.01 # Weight for GAN loss
   fm_loss: [1.0, 1.0, 1.0, 1.0]  # Weights for feature matching loss
-  sync_loss: 0.08 # 0.05  # Weight for sync loss
+  sync_loss: 0.1 # 0.05  # Weight for sync loss
   mouth_gan_loss: 0.015 # 0.01  # Weight for mouth-specific GAN loss
 
 model_params:
