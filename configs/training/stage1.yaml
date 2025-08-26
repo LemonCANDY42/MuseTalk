@@ -34,8 +34,9 @@ data:
   min_face_size: 150 # 150  # Minimum face size in pixels
 
 loss_params:
-  l1_loss: 0.5  # Weight for L1 loss
-  l2_loss: 2  # Weight for L2 loss
+  use_smooth_l1_loss: True
+  l1_loss: 1  # Weight for L1 loss
+  l2_loss: 0  # Weight for L2 loss
   vgg_loss: 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
   pyramid_scale: [1, 0.5, 0.25, 0.125]  # Scales for image pyramid

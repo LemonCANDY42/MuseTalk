@@ -222,10 +222,10 @@ def main(cfg):
                 
                 # Process sync loss if enabled
                 if cfg.loss_params.sync_loss > 0:
-                    mels = batch['mel'].to( # .to(weight_dtype)
-                    accelerator.device, 
-                    non_blocking=True
-                )
+                    mels = batch['mel'].to(weight_dtype).to(
+                        accelerator.device, 
+                        non_blocking=True
+                    )
                     # Prepare frames for latentsync (combine channels and frames)
                     gt_frames = rearrange(pixel_values, 'b f c h w-> b (f c) h w')
                     # Use lower half of face for latentsync
@@ -233,7 +233,7 @@ def main(cfg):
                     gt_frames = gt_frames[:, :, height // 2:, :]
                     
                     # Get audio embeddings
-                    audio_embed = syncnet.get_audio_embed(mels.to(torch.float32)).to(weight_dtype)
+                    audio_embed = syncnet.get_audio_embed(mels) # .to(weight_dtype)
                     
                     # Calculate adapted weight based on audio-visual similarity
                     if cfg.use_adapted_weight:
@@ -332,9 +332,10 @@ def main(cfg):
             loss = cfg.loss_params.l1_loss * l1_loss * adapted_weight
             
             # Calculate L2 loss
-            l2_loss = loss_dict['L2_loss'](frames, image_pred)
-            l2_loss_accum += l2_loss.item()
-            loss += cfg.loss_params.l2_loss * l2_loss * adapted_weight
+            if cfg.loss_params.l2_loss > 0:
+                l2_loss = loss_dict['L2_loss'](frames, image_pred)
+                l2_loss_accum += l2_loss.item()
+                loss += cfg.loss_params.l2_loss * l2_loss * adapted_weight
 
             # Process mouth GAN loss if enabled
             if cfg.loss_params.mouth_gan_loss > 0:

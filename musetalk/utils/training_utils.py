@@ -211,7 +211,7 @@ def initialize_dataloaders(cfg):
 def initialize_loss_functions(cfg, accelerator, scheduler_max_steps):
     """Initialize loss functions and discriminators"""
     loss_dict = {
-        'L1_loss': nn.L1Loss(reduction='mean'),
+        'L1_loss': nn.SmoothL1Loss(reduction='mean') if cfg.loss_params.use_smooth_l1_loss else nn.L1Loss(reduction='mean'),
         'L2_loss': nn.MSELoss(reduction='mean'),
         'discriminator': None,
         'mouth_discriminator': None,
@@ -274,7 +274,7 @@ def initialize_syncnet(cfg, accelerator, weight_dtype):
         checkpoint = torch.load(
             syncnet_config.ckpt.inference_ckpt_path, map_location=accelerator.device)
         syncnet.load_state_dict(checkpoint["state_dict"])
-        syncnet.to(dtype=torch.float32) #  if cfg.solver.mixed_precision == 'fp32' else torch.bfloat16
+        syncnet.to(dtype=weight_dtype)  # if cfg.solver.mixed_precision == 'fp32' else torch.bfloat16 if cfg.solver.mixed_precision == 'bf16' else torch.float8_e4m3fn if cfg.solver.mixed_precision == 'fp8'else torch.float16)
         syncnet.requires_grad_(False)
         syncnet.eval()
         return syncnet
