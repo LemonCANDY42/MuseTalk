@@ -35,7 +35,7 @@ data:
 
 loss_params:
   use_smooth_l1_loss: True
-  l1_loss: 5 # 1 # Weight for L1 loss
+  l1_loss: 10 # 1 # Weight for L1 loss
   l2_loss: 0  # Weight for L2 loss
   vgg_loss: 0.1 # 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
@@ -67,13 +67,13 @@ discriminator_train_params:
 solver:
   gradient_accumulation_steps: 8 # 8  # Number of steps for gradient accumulation
   uncond_steps: 10  # Number of unconditional steps
-  mixed_precision: 'bf16' # 'bf16' 'fp32' # Precision mode for training
+  mixed_precision: 'fp16' # 'bf16' 'fp32' # Precision mode for training
   enable_xformers_memory_efficient_attention: True  # Whether to use memory efficient attention
   gradient_checkpointing: True  # Whether to use gradient checkpointing
   max_train_steps: 500000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 8.0e-7 # 5.0e-6 # Base learning rate
+  learning_rate: 2.0e-6 # 5.0e-6 # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 500 # 1000 # Number of warmup steps for learning rate
   lr_scheduler: "linear" # "constant_with_warmup" # "linear"  # Type of learning rate scheduler
@@ -89,5 +89,5 @@ save_model_epoch_interval: 50000 # 250000 # Interval between model saves
 checkpointing_steps: 10000  # Number of steps between checkpoints
 val_freq: 5000  # Frequency of validation
 
-seed: 37  # Random seed for reproducibility
+seed: 1207  # Random seed for reproducibility
 

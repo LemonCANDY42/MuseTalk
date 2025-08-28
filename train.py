@@ -89,7 +89,7 @@ def main(cfg):
     model_dict = initialize_models_and_optimizers(cfg, accelerator, weight_dtype)
     dataloader_dict = initialize_dataloaders(cfg)
     loss_dict = initialize_loss_functions(cfg, accelerator, model_dict['scheduler_max_steps'])
-    syncnet = initialize_syncnet(cfg, accelerator, weight_dtype)
+    syncnet = initialize_syncnet(cfg, accelerator, weight_dtype=torch.float32) # weight_dtype
     vgg_IN, pyramid, downsampler = initialize_vgg(cfg, accelerator)
 
     # Prepare everything with our `accelerator`.
@@ -233,13 +233,14 @@ def main(cfg):
                     gt_frames = gt_frames[:, :, height // 2:, :]
                     
                     # Get audio embeddings
-                    audio_embed = syncnet.get_audio_embed(mels) # .to(weight_dtype)
+                    with accelerator.autocast():
+                        audio_embed = syncnet.get_audio_embed(mels.to(torch.float32)) # .to(weight_dtype)
                     
                     # Calculate adapted weight based on audio-visual similarity
                     if cfg.use_adapted_weight:
                         vision_embed_gt = syncnet.get_vision_embed(gt_frames)
                         image_audio_sim_gt = F.cosine_similarity(
-                            audio_embed, 
+                            audio_embed.to(vision_embed_gt.dtype), 
                             vision_embed_gt, 
                             dim=1
                         )[0]
@@ -362,19 +363,20 @@ def main(cfg):
 
             # Process VGG loss if enabled
             if cfg.loss_params.vgg_loss > 0:
-                pyramide_real = pyramid(downsampler(frames))
-                pyramide_generated = pyramid(downsampler(image_pred))
+                with accelerator.autocast():
+                    pyramide_real = pyramid(downsampler(frames))
+                    pyramide_generated = pyramid(downsampler(image_pred))
 
-                loss_IN = 0
-                for scale in cfg.loss_params.pyramid_scale:
-                    x_vgg = vgg_IN(pyramide_generated['prediction_' + str(scale)])
-                    y_vgg = vgg_IN(pyramide_real['prediction_' + str(scale)])
-                    for i, weight in enumerate(cfg.loss_params.vgg_layer_weight):
-                        value = torch.abs(x_vgg[i].detach() - y_vgg[i].detach()).mean()
-                        loss_IN += weight * value
-                loss_IN /= sum(cfg.loss_params.vgg_layer_weight)
-                loss += loss_IN * cfg.loss_params.vgg_loss * adapted_weight
-                vgg_loss_accum += loss_IN.item()
+                    loss_IN = 0
+                    for scale in cfg.loss_params.pyramid_scale:
+                        x_vgg = vgg_IN(pyramide_generated['prediction_' + str(scale)])
+                        y_vgg = vgg_IN(pyramide_real['prediction_' + str(scale)])
+                        for i, weight in enumerate(cfg.loss_params.vgg_layer_weight):
+                            value = torch.abs(x_vgg[i].detach() - y_vgg[i].detach()).mean()
+                            loss_IN += weight * value
+                    loss_IN /= sum(cfg.loss_params.vgg_layer_weight)
+                    loss += loss_IN * cfg.loss_params.vgg_loss * adapted_weight
+                    vgg_loss_accum += loss_IN.item()
 
             # Process GAN loss if enabled
             if cfg.loss_params.gan_loss > 0:
@@ -433,19 +435,20 @@ def main(cfg):
                 pred_frames = rearrange(
                     image_pred, '(b f) c h w-> b (f c) h w', f=pixel_values_backward.shape[1])
                 pred_frames = pred_frames[:, :, height // 2 :, :]
-                sync_loss, image_audio_sim_pred = get_sync_loss(
-                    audio_embed, 
-                    gt_frames, 
-                    pred_frames, 
-                    syncnet, 
-                    adapted_weight,
-                    weight_dtype,
-                    accelerator,
-                    frames_left_index=frames_left_index,
-                    frames_right_index=frames_right_index,
-                )
-                sync_loss_accum += sync_loss.item()
-                loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight
+                with accelerator.autocast():
+                    sync_loss, image_audio_sim_pred = get_sync_loss(
+                        audio_embed.float(), 
+                        gt_frames.float(), 
+                        pred_frames.float(), 
+                        syncnet, 
+                        adapted_weight,
+                        weight_dtype,
+                        accelerator,
+                        frames_left_index=frames_left_index,
+                        frames_right_index=frames_right_index,
+                    )
+                    sync_loss_accum += sync_loss.item()
+                    loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight
 
             # Backward pass
             avg_loss = accelerator.gather(loss.repeat(cfg.data.train_bs)).mean()

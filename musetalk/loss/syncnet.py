@@ -29,12 +29,12 @@ def get_sync_loss(
     frames_sync_loss = torch.cat(
         [gt_frames[:, :3 * frames_left_index, ...], pred_frames, gt_frames[:, 3 * frames_right_index:, ...]], 
         axis=1
-    ).to(weight_dtype).to(
+    ).to(torch.float32).to(
                     accelerator.device, 
                     non_blocking=True
                 )
     vision_embed = syncnet.get_image_embed(frames_sync_loss)
-    y = torch.ones(frames_sync_loss.size(0), 1).to(weight_dtype).to(audio_embed.device)
+    y = torch.ones(frames_sync_loss.size(0), 1).to(torch.float32).to(audio_embed.device)
     loss, score = cosine_loss(audio_embed, vision_embed, y)
     return loss, score
 
