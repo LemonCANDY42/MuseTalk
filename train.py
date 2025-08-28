@@ -456,7 +456,7 @@ def main(cfg):
                         print("sync_loss is nan, set it to 0")
                         sync_loss = last_sync_loss
                     else:
-                        last_sync_loss = sync_loss
+                        last_sync_loss = sync_loss.detech()
                     sync_loss_accum += sync_loss.item()
                     
                     loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight
