@@ -451,12 +451,12 @@ def main(cfg):
                         frames_right_index=frames_right_index,
                     )
                     # accelerator.print(f"sync_loss: {sync_loss:.6f}")
-                    sync_loss = sync_loss.clamp(min=-65504, max=65504)
+                    # sync_loss = sync_loss.clamp(min=-65504, max=65504)
                     if torch.isnan(sync_loss).any():
                         print("sync_loss is nan, set it to 0")
-                        sync_loss = last_sync_loss
+                        sync_loss = last_sync_loss.clone().detach().requires_grad_(True)
                     else:
-                        last_sync_loss = sync_loss.detech()
+                        last_sync_loss = sync_loss.detech().clone()
                     sync_loss_accum += sync_loss.item()
                     
                     loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight
