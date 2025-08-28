@@ -4,7 +4,7 @@ unet_sub_folder: musetalkV15  # Subfolder name for UNet model
 random_init_unet: False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
 pretrained_model_name_or_path: "./models"  # Path to pretrained models
-unet_model_name: "unet-8-25-stage1-60000.pth" # "unet.pth"
+unet_model_name: "unet-8-28-stage2-50000.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
 vae_type: "sd-vae" # "sd-vae"  # Type of VAE model to use
@@ -37,12 +37,12 @@ loss_params:
   use_smooth_l1_loss: True
   l1_loss: 5 # 1 # Weight for L1 loss
   l2_loss: 0  # Weight for L2 loss
-  vgg_loss: 0.01 # 0.01  # Weight for VGG perceptual loss
+  vgg_loss: 0.1 # 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
   pyramid_scale: [1, 0.5, 0.25, 0.125]  # Scales for image pyramid
   gan_loss: 0.015 # 0.01 # Weight for GAN loss
   fm_loss: [1.0, 1.0, 1.0, 1.0]  # Weights for feature matching loss
-  sync_loss: 0.1 # 0.05  # Weight for sync loss
+  sync_loss: 0.08 # 0.05  # Weight for sync loss
   mouth_gan_loss: 0.015 # 0.01  # Weight for mouth-specific GAN loss
 
 model_params:
@@ -73,7 +73,7 @@ solver:
   max_train_steps: 500000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 2.0e-6 # 5.0e-6 # Base learning rate
+  learning_rate: 8.0e-7 # 5.0e-6 # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 500 # 1000 # Number of warmup steps for learning rate
   lr_scheduler: "linear" # "constant_with_warmup" # "linear"  # Type of learning rate scheduler

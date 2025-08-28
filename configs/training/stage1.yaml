@@ -35,7 +35,7 @@ data:
 
 loss_params:
   use_smooth_l1_loss: True
-  l1_loss: 10 # 1 # Weight for L1 loss
+  l1_loss: 1 # 1 # Weight for L1 loss
   l2_loss: 0  # Weight for L2 loss
   vgg_loss: 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
