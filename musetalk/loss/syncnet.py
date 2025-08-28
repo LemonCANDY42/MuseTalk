@@ -4,10 +4,10 @@ from torch.nn import functional as F
 
 from .conv import Conv2d
 
-logloss = nn.BCELoss(reduction="none")
+logloss = nn.BCEWithLogitsLoss(reduction="none") # nn.BCELoss(reduction="none")
 def cosine_loss(a, v, y):
     d = nn.functional.cosine_similarity(a, v)
-    d = d.clamp(0,1) # cosine_similarity的取值范围是【-1，1】，BCE如果输入负数会报错RuntimeError: CUDA error: device-side assert triggered
+    # d = d.clamp(0,1) # cosine_similarity的取值范围是【-1，1】，BCE如果输入负数会报错RuntimeError: CUDA error: device-side assert triggered
     loss = logloss(d.unsqueeze(1), y).squeeze()
     loss = loss.mean()
     return loss, d

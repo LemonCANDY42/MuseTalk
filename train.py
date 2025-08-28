@@ -190,6 +190,7 @@ def main(cfg):
         fm_loss_accum = 0.0
         sync_loss_accum = 0.0
         adapted_weight_accum = 0.0
+        last_sync_loss = 0.0
 
         t_data_start = time.time()
         for step, batch in enumerate(dataloader_dict['train_dataloader']):
@@ -314,42 +315,44 @@ def main(cfg):
                 input_latents = input_latents.to(weight_dtype)
                 timesteps = torch.tensor([0], device=input_latents.device)
 
-            # Forward pass
-            latents_pred = model_dict['net'](
-                input_latents,
-                timesteps,
-                audio_prompts_backward,
-            )
-            latents_pred = (1 / model_dict['vae'].config.scaling_factor) * latents_pred
-            image_pred = model_dict['vae'].decode(latents_pred).sample
-            
-            # Convert to float
-            image_pred = image_pred.float()
-            frames = frames.float()
-            
-            alpha = 1/4
-            beta = 3/4 
+            # auto cast
+            with accelerator.autocast():
+                # Forward pass
+                latents_pred = model_dict['net'](
+                    input_latents,
+                    timesteps,
+                    audio_prompts_backward,
+                )
+                latents_pred = (1 / model_dict['vae'].config.scaling_factor) * latents_pred
+                image_pred = model_dict['vae'].decode(latents_pred).sample
+                
+                # Convert to float
+                image_pred = image_pred.float()
+                frames = frames.float()
+                
+                alpha = 1/4
+                beta = 3/4 
 
-            # 像素空间进行下半张脸对比
-            # 取上半张脸
-            image_high_pred_half = image_pred[:, :, :image_pred.shape[2]//2, :]
-            image_high_gt_half = frames[:, :, :frames.shape[2]//2, :]
-            # 取下半张脸
-            image_low_pred_half = image_pred[:, :, image_pred.shape[2]//2:, :]
-            image_low_gt_half = frames[:, :, frames.shape[2]//2:, :]
+                # 像素空间进行下半张脸对比
+                # 取上半张脸
+                image_high_pred_half = image_pred[:, :, :image_pred.shape[2]//2, :]
+                image_high_gt_half = frames[:, :, :frames.shape[2]//2, :]
+                # 取下半张脸
+                image_low_pred_half = image_pred[:, :, image_pred.shape[2]//2:, :]
+                image_low_gt_half = frames[:, :, frames.shape[2]//2:, :]
 
-            # Calculate L1 loss
-            l1_loss_high_half = loss_dict['L1_loss'](image_high_gt_half, image_high_pred_half)
-            l1_loss_low_half = loss_dict['L1_loss'](image_low_pred_half, image_low_gt_half)
-            l1_loss = alpha * l1_loss_high_half + beta * l1_loss_low_half
-            l1_loss_accum += l1_loss.item()
-            loss = cfg.loss_params.l1_loss * l1_loss * adapted_weight
-            
-            # Calculate L2 loss
-            if cfg.loss_params.l2_loss > 0:
-                l2_loss = loss_dict['L2_loss'](frames, image_pred)
-                l2_loss_accum += l2_loss.item()
-                loss += cfg.loss_params.l2_loss * l2_loss * adapted_weight
+                # Calculate L1 loss
+                l1_loss_high_half = loss_dict['L1_loss'](image_high_gt_half, image_high_pred_half)
+                l1_loss_low_half = loss_dict['L1_loss'](image_low_pred_half, image_low_gt_half)
+                l1_loss = alpha * l1_loss_high_half + beta * l1_loss_low_half
+                l1_loss_accum += l1_loss.item()
+                loss = cfg.loss_params.l1_loss * l1_loss * adapted_weight
+                
+                # Calculate L2 loss
+                if cfg.loss_params.l2_loss > 0:
+                    l2_loss = loss_dict['L2_loss'](frames, image_pred)
+                    l2_loss_accum += l2_loss.item()
+                    loss += cfg.loss_params.l2_loss * l2_loss * adapted_weight
 
             # Process mouth GAN loss if enabled
             if cfg.loss_params.mouth_gan_loss > 0:
@@ -447,7 +450,15 @@ def main(cfg):
                         frames_left_index=frames_left_index,
                         frames_right_index=frames_right_index,
                     )
+                    # accelerator.print(f"sync_loss: {sync_loss:.6f}")
+                    sync_loss = sync_loss.clamp(min=-65504, max=65504)
+                    if torch.isnan(sync_loss).any():
+                        print("sync_loss is nan, set it to 0")
+                        sync_loss = last_sync_loss
+                    else:
+                        last_sync_loss = sync_loss
                     sync_loss_accum += sync_loss.item()
+                    
                     loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight
 
             # Backward pass
