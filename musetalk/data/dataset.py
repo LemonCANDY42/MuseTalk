@@ -478,7 +478,7 @@ class FaceDataset(Dataset):
             try:
                 audio_feature, audio_offset = self.get_audio_file(wav_path, audio_offset)
                 _, audio_offset = self.get_audio_file_mel(wav_path, audio_offset)
-                if self.cfg.loss_params.sync_loss > 0:
+                if self.cfg["loss_params"]["sync_loss"] > 0:
                     audio_feature_mel = self.get_syncnet_input(video_path)
             except Exception as e:
                 print(f"audio file error:{wav_path}")
@@ -487,7 +487,7 @@ class FaceDataset(Dataset):
                 time.sleep(0.001)
                 continue
             
-            if self.cfg.loss_params.sync_loss > 0:
+            if self.cfg["loss_params"]["sync_loss"] > 0:
                 mel = self.crop_audio_window(audio_feature_mel, audio_offset)
                 if mel.shape[0] != syncnet_mel_step_size:
                     attempts += 1

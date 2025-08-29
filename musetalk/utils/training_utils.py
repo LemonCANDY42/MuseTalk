@@ -169,6 +169,7 @@ def initialize_dataloaders(cfg):
         "cropping_jaw2edge_margin_std": cfg.cropping_jaw2edge_margin_std,
         "crop_type": cfg.crop_type,
         "random_margin_method": cfg.random_margin_method,
+        "loss_params": {"sync_loss":cfg.loss_params.sync_loss}
     })
 
     dataloader_dict['train_dataloader'] = torch.utils.data.DataLoader(
@@ -195,6 +196,8 @@ def initialize_dataloaders(cfg):
         "cropping_jaw2edge_margin_std": cfg.cropping_jaw2edge_margin_std,
         "crop_type": cfg.crop_type,
         "random_margin_method": cfg.random_margin_method,
+        "loss_params": {"sync_loss":cfg.loss_params.sync_loss}
+
     })
 
     dataloader_dict['val_dataloader'] = torch.utils.data.DataLoader(
