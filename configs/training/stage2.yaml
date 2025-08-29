@@ -4,7 +4,7 @@ unet_sub_folder: musetalkV15  # Subfolder name for UNet model
 random_init_unet: False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
 pretrained_model_name_or_path: "./models"  # Path to pretrained models
-unet_model_name: "unet_ori.pth" # "unet.pth"
+unet_model_name: "unet-8-25-stage1-60000.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
 vae_type: "sd-vae" # "sd-vae"  # Type of VAE model to use
