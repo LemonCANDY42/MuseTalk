@@ -89,7 +89,7 @@ def main(cfg):
     model_dict = initialize_models_and_optimizers(cfg, accelerator, weight_dtype)
     dataloader_dict = initialize_dataloaders(cfg)
     loss_dict = initialize_loss_functions(cfg, accelerator, model_dict['scheduler_max_steps'])
-    syncnet = initialize_syncnet(cfg, accelerator, weight_dtype=torch.float32) # weight_dtype
+    syncnet = initialize_syncnet(cfg, accelerator, weight_dtype=weight_dtype) # weight_dtype
     vgg_IN, pyramid, downsampler = initialize_vgg(cfg, accelerator)
 
     # Prepare everything with our `accelerator`.
@@ -197,45 +197,45 @@ def main(cfg):
             pass
             t_data = time.time() - t_data_start
             t_model_start = time.time()
-
-            with torch.no_grad():
+            
+            with accelerator.autocast():
                 # Process input data
-                pixel_values = batch["pixel_values_vid"].to(weight_dtype).to(
-                    accelerator.device, 
-                    non_blocking=True
-                )
-                bsz, num_frames, c, h, w = pixel_values.shape
-                
-                # Process reference images
-                ref_pixel_values = batch["pixel_values_ref_img"].to(weight_dtype).to(
-                    accelerator.device, 
-                    non_blocking=True
-                )
-                
-                # Get face mask for GAN
-                pixel_values_face_mask = batch['pixel_values_face_mask']
-                
-                # Process audio features
-                audio_prompts = process_audio_features(cfg, batch, model_dict['wav2vec'], bsz, num_frames, weight_dtype)
-                
-                # Initialize adapted weight
-                adapted_weight = 1
-                
-                # Process sync loss if enabled
-                if cfg.loss_params.sync_loss > 0:
-                    mels = batch['mel'].to(weight_dtype).to(
+                with torch.no_grad():
+
+                    pixel_values = batch["pixel_values_vid"].to(weight_dtype).to(
                         accelerator.device, 
                         non_blocking=True
                     )
-                    # Prepare frames for latentsync (combine channels and frames)
-                    gt_frames = rearrange(pixel_values, 'b f c h w-> b (f c) h w')
-                    # Use lower half of face for latentsync
-                    height = gt_frames.shape[2]
-                    gt_frames = gt_frames[:, :, height // 2:, :]
+                    bsz, num_frames, c, h, w = pixel_values.shape
                     
-                    # Get audio embeddings
-                    with accelerator.autocast():
-                        audio_embed = syncnet.get_audio_embed(mels.to(torch.float32)) # .to(weight_dtype)
+                    # Process reference images
+                    ref_pixel_values = batch["pixel_values_ref_img"].to(weight_dtype).to(
+                        accelerator.device, 
+                        non_blocking=True
+                    )
+                    
+                    # Get face mask for GAN
+                    pixel_values_face_mask = batch['pixel_values_face_mask']
+                    
+                    # Process audio features
+                    audio_prompts = process_audio_features(cfg, batch, model_dict['wav2vec'], bsz, num_frames, weight_dtype)
+                    
+                    # Initialize adapted weight
+                    adapted_weight = 1
+                    # Process sync loss if enabled
+                    if cfg.loss_params.sync_loss > 0:
+                        mels = batch['mel'].to(weight_dtype).to( # 
+                            accelerator.device, 
+                            non_blocking=True
+                        )
+                        # Prepare frames for latentsync (combine channels and frames)
+                        gt_frames = rearrange(pixel_values, 'b f c h w-> b (f c) h w')
+                        # Use lower half of face for latentsync
+                        height = gt_frames.shape[2]
+                        gt_frames = gt_frames[:, :, height // 2:, :]
+                    
+                        # Get audio embeddings
+                        audio_embed = syncnet.get_audio_embed(mels) # .to(weight_dtype)
                     
                     # Calculate adapted weight based on audio-visual similarity
                     if cfg.use_adapted_weight:
@@ -257,66 +257,66 @@ def main(cfg):
                                 print(f"unknown adapted_weight_type: {cfg.adapted_weight_type}")
                                 adapted_weight = 1
                     
-                    # Random frame selection for memory efficiency
-                    max_start = 16 - cfg.num_backward_frames
-                    frames_left_index = random.randint(0, max_start) if max_start > 0 else 0
-                    frames_right_index = frames_left_index + cfg.num_backward_frames         
-                else:
-                    frames_left_index = 0
-                    frames_right_index = cfg.data.n_sample_frames
+                        # Random frame selection for memory efficiency
+                        max_start = 16 - cfg.num_backward_frames
+                        frames_left_index = random.randint(0, max_start) if max_start > 0 else 0
+                        frames_right_index = frames_left_index + cfg.num_backward_frames         
+                    else:
+                        frames_left_index = 0
+                        frames_right_index = cfg.data.n_sample_frames
 
-                # Extract frames for backward pass
-                pixel_values_backward = pixel_values[:, frames_left_index:frames_right_index, ...]
-                ref_pixel_values_backward = ref_pixel_values[:, frames_left_index:frames_right_index, ...]
-                pixel_values_face_mask_backward = pixel_values_face_mask[:, frames_left_index:frames_right_index, ...]
-                audio_prompts_backward = audio_prompts[:, frames_left_index:frames_right_index, ...]
-                
-                # Encode target images
-                frames = rearrange(pixel_values_backward, 'b f c h w-> (b f) c h w')
-                latents = model_dict['vae'].encode(frames).latent_dist.mode()
-                latents = latents * model_dict['vae'].config.scaling_factor
-                latents = latents.float()
+                    # Extract frames for backward pass
+                    pixel_values_backward = pixel_values[:, frames_left_index:frames_right_index, ...]
+                    ref_pixel_values_backward = ref_pixel_values[:, frames_left_index:frames_right_index, ...]
+                    pixel_values_face_mask_backward = pixel_values_face_mask[:, frames_left_index:frames_right_index, ...]
+                    audio_prompts_backward = audio_prompts[:, frames_left_index:frames_right_index, ...]
+                    
+                    # Encode target images
+                    frames = rearrange(pixel_values_backward, 'b f c h w-> (b f) c h w')
+                    latents = model_dict['vae'].encode(frames).latent_dist.mode()
+                    latents = latents * model_dict['vae'].config.scaling_factor
+                    latents = latents.float()
 
-                # Create masked images
-                masked_pixel_values = pixel_values_backward.clone()
-                masked_pixel_values[:, :, :, h//2:, :] = -1
-                masked_frames = rearrange(masked_pixel_values, 'b f c h w -> (b f) c h w')
-                masked_latents = model_dict['vae'].encode(masked_frames).latent_dist.mode()
-                masked_latents = masked_latents * model_dict['vae'].config.scaling_factor
-                masked_latents = masked_latents.float()
+                    # Create masked images
+                    masked_pixel_values = pixel_values_backward.clone()
+                    masked_pixel_values[:, :, :, h//2:, :] = -1
+                    masked_frames = rearrange(masked_pixel_values, 'b f c h w -> (b f) c h w')
+                    masked_latents = model_dict['vae'].encode(masked_frames).latent_dist.mode()
+                    masked_latents = masked_latents * model_dict['vae'].config.scaling_factor
+                    masked_latents = masked_latents.float()
 
-                # Encode reference images
-                ref_frames = rearrange(ref_pixel_values_backward, 'b f c h w-> (b f) c h w')
-                ref_latents = model_dict['vae'].encode(ref_frames).latent_dist.mode()
-                ref_latents = ref_latents * model_dict['vae'].config.scaling_factor
-                ref_latents = ref_latents.float()
+                    # Encode reference images
+                    ref_frames = rearrange(ref_pixel_values_backward, 'b f c h w-> (b f) c h w')
+                    ref_latents = model_dict['vae'].encode(ref_frames).latent_dist.mode()
+                    ref_latents = ref_latents * model_dict['vae'].config.scaling_factor
+                    ref_latents = ref_latents.float()
 
-                # Prepare face mask and audio features
-                pixel_values_face_mask_backward = rearrange(
-                    pixel_values_face_mask_backward, 
-                    "b f c h w -> (b f) c h w"
-                )
-                audio_prompts_backward = rearrange(
-                    audio_prompts_backward, 
-                    'b f c h w-> (b f) c h w'
-                )
-                audio_prompts_backward = rearrange(
-                    audio_prompts_backward, 
-                    '(b f) c h w -> (b f) (c h) w', 
-                    b=bsz
-                )
+                    # Prepare face mask and audio features
+                    pixel_values_face_mask_backward = rearrange(
+                        pixel_values_face_mask_backward, 
+                        "b f c h w -> (b f) c h w"
+                    )
+                    audio_prompts_backward = rearrange(
+                        audio_prompts_backward, 
+                        'b f c h w-> (b f) c h w'
+                    )
+                    audio_prompts_backward = rearrange(
+                        audio_prompts_backward, 
+                        '(b f) c h w -> (b f) (c h) w', 
+                        b=bsz
+                    )
 
-                # Apply reference dropout (currently inactive)
-                dropout = nn.Dropout(p=cfg.ref_dropout_rate)
-                ref_latents = dropout(ref_latents)
+                    # Apply reference dropout (currently inactive)
+                    dropout = nn.Dropout(p=cfg.ref_dropout_rate)
+                    ref_latents = dropout(ref_latents)
 
-                # Prepare model inputs
-                input_latents = torch.cat([masked_latents, ref_latents], dim=1)
-                input_latents = input_latents.to(weight_dtype)
-                timesteps = torch.tensor([0], device=input_latents.device)
+                    # Prepare model inputs
+                    input_latents = torch.cat([masked_latents, ref_latents], dim=1)
+                    input_latents = input_latents.to(weight_dtype)
+                    timesteps = torch.tensor([0], device=input_latents.device)
 
-            # auto cast
-            with accelerator.autocast():
+                # # auto cast
+                # with accelerator.autocast():
                 # Forward pass
                 latents_pred = model_dict['net'](
                     input_latents,
@@ -354,95 +354,95 @@ def main(cfg):
                     l2_loss_accum += l2_loss.item()
                     loss += cfg.loss_params.l2_loss * l2_loss * adapted_weight
 
-            # Process mouth GAN loss if enabled
-            if cfg.loss_params.mouth_gan_loss > 0:
-                frames_mouth, image_pred_mouth = get_mouth_region(
-                    frames, 
-                    image_pred, 
-                    pixel_values_face_mask_backward
-                )
-                pyramide_real_mouth = pyramid(downsampler(frames_mouth))
-                pyramide_generated_mouth = pyramid(downsampler(image_pred_mouth))
+                # Process mouth GAN loss if enabled
+                if cfg.loss_params.mouth_gan_loss > 0:
+                    frames_mouth, image_pred_mouth = get_mouth_region(
+                        frames, 
+                        image_pred, 
+                        pixel_values_face_mask_backward
+                    )
+                    pyramide_real_mouth = pyramid(downsampler(frames_mouth))
+                    pyramide_generated_mouth = pyramid(downsampler(image_pred_mouth))
 
-            # Process VGG loss if enabled
-            if cfg.loss_params.vgg_loss > 0:
-                with accelerator.autocast():
-                    pyramide_real = pyramid(downsampler(frames))
-                    pyramide_generated = pyramid(downsampler(image_pred))
+                # Process VGG loss if enabled
+                if cfg.loss_params.vgg_loss > 0:
+                    with accelerator.autocast():
+                        pyramide_real = pyramid(downsampler(frames))
+                        pyramide_generated = pyramid(downsampler(image_pred))
 
-                    loss_IN = 0
-                    for scale in cfg.loss_params.pyramid_scale:
-                        x_vgg = vgg_IN(pyramide_generated['prediction_' + str(scale)])
-                        y_vgg = vgg_IN(pyramide_real['prediction_' + str(scale)])
-                        for i, weight in enumerate(cfg.loss_params.vgg_layer_weight):
-                            value = torch.abs(x_vgg[i].detach() - y_vgg[i].detach()).mean()
-                            loss_IN += weight * value
-                    loss_IN /= sum(cfg.loss_params.vgg_layer_weight)
-                    loss += loss_IN * cfg.loss_params.vgg_loss * adapted_weight
-                    vgg_loss_accum += loss_IN.item()
+                        loss_IN = 0
+                        for scale in cfg.loss_params.pyramid_scale:
+                            x_vgg = vgg_IN(pyramide_generated['prediction_' + str(scale)])
+                            y_vgg = vgg_IN(pyramide_real['prediction_' + str(scale)])
+                            for i, weight in enumerate(cfg.loss_params.vgg_layer_weight):
+                                value = torch.abs(x_vgg[i].detach() - y_vgg[i].detach()).mean()
+                                loss_IN += weight * value
+                        loss_IN /= sum(cfg.loss_params.vgg_layer_weight)
+                        loss += loss_IN * cfg.loss_params.vgg_loss * adapted_weight
+                        vgg_loss_accum += loss_IN.item()
 
-            # Process GAN loss if enabled
-            if cfg.loss_params.gan_loss > 0:
-                set_requires_grad(loss_dict['discriminator'], False)
-                loss_G = 0.
-                discriminator_maps_generated = loss_dict['discriminator'](pyramide_generated)
-                discriminator_maps_real = loss_dict['discriminator'](pyramide_real)
+                # Process GAN loss if enabled
+                if cfg.loss_params.gan_loss > 0:
+                    set_requires_grad(loss_dict['discriminator'], False)
+                    loss_G = 0.
+                    discriminator_maps_generated = loss_dict['discriminator'](pyramide_generated)
+                    discriminator_maps_real = loss_dict['discriminator'](pyramide_real)
 
-                for scale in loss_dict['disc_scales']:
-                    key = 'prediction_map_%s' % scale
-                    value = ((1 - discriminator_maps_generated[key]) ** 2).mean()
-                    loss_G += value
-                gan_loss_accum += loss_G.item()
-
-                loss += loss_G * cfg.loss_params.gan_loss * get_ganloss_weight(global_step) * adapted_weight
-
-                # Process feature matching loss if enabled
-                if cfg.loss_params.fm_loss[0] > 0:
-                    L_feature_matching = 0.
                     for scale in loss_dict['disc_scales']:
-                        key = 'feature_maps_%s' % scale
-                        for i, (a, b) in enumerate(zip(discriminator_maps_real[key], discriminator_maps_generated[key])):
-                            value = torch.abs(a - b).mean()
-                            L_feature_matching += value * cfg.loss_params.fm_loss[i]
-                    loss += L_feature_matching * adapted_weight
-                    fm_loss_accum += L_feature_matching.item()
+                        key = 'prediction_map_%s' % scale
+                        value = ((1 - discriminator_maps_generated[key]) ** 2).mean()
+                        loss_G += value
+                    gan_loss_accum += loss_G.item()
 
-            # Process mouth GAN loss if enabled
-            if cfg.loss_params.mouth_gan_loss > 0:
-                set_requires_grad(loss_dict['mouth_discriminator'], False)
-                loss_G = 0.
-                mouth_discriminator_maps_generated = loss_dict['mouth_discriminator'](pyramide_generated_mouth)
-                mouth_discriminator_maps_real = loss_dict['mouth_discriminator'](pyramide_real_mouth)
+                    loss += loss_G * cfg.loss_params.gan_loss * get_ganloss_weight(global_step) * adapted_weight
 
-                for scale in loss_dict['disc_scales']:
-                    key = 'prediction_map_%s' % scale
-                    value = ((1 - mouth_discriminator_maps_generated[key]) ** 2).mean()
-                    loss_G += value
-                gan_loss_accum_mouth += loss_G.item()
+                    # Process feature matching loss if enabled
+                    if cfg.loss_params.fm_loss[0] > 0:
+                        L_feature_matching = 0.
+                        for scale in loss_dict['disc_scales']:
+                            key = 'feature_maps_%s' % scale
+                            for i, (a, b) in enumerate(zip(discriminator_maps_real[key], discriminator_maps_generated[key])):
+                                value = torch.abs(a - b).mean()
+                                L_feature_matching += value * cfg.loss_params.fm_loss[i]
+                        loss += L_feature_matching * adapted_weight
+                        fm_loss_accum += L_feature_matching.item()
 
-                loss += loss_G * cfg.loss_params.mouth_gan_loss * get_ganloss_weight(global_step) * adapted_weight
+                # Process mouth GAN loss if enabled
+                if cfg.loss_params.mouth_gan_loss > 0:
+                    set_requires_grad(loss_dict['mouth_discriminator'], False)
+                    loss_G = 0.
+                    mouth_discriminator_maps_generated = loss_dict['mouth_discriminator'](pyramide_generated_mouth)
+                    mouth_discriminator_maps_real = loss_dict['mouth_discriminator'](pyramide_real_mouth)
 
-                # Process feature matching loss for mouth if enabled
-                if cfg.loss_params.fm_loss[0] > 0:
-                    L_feature_matching = 0.
                     for scale in loss_dict['disc_scales']:
-                        key = 'feature_maps_%s' % scale
-                        for i, (a, b) in enumerate(zip(mouth_discriminator_maps_real[key], mouth_discriminator_maps_generated[key])):
-                            value = torch.abs(a - b).mean()
-                            L_feature_matching += value * cfg.loss_params.fm_loss[i]
-                    loss += L_feature_matching * adapted_weight
-                    fm_loss_accum += L_feature_matching.item()
-        
-            # Process sync loss if enabled
-            if cfg.loss_params.sync_loss > 0:
-                pred_frames = rearrange(
-                    image_pred, '(b f) c h w-> b (f c) h w', f=pixel_values_backward.shape[1])
-                pred_frames = pred_frames[:, :, height // 2 :, :]
-                with accelerator.autocast():
+                        key = 'prediction_map_%s' % scale
+                        value = ((1 - mouth_discriminator_maps_generated[key]) ** 2).mean()
+                        loss_G += value
+                    gan_loss_accum_mouth += loss_G.item()
+
+                    loss += loss_G * cfg.loss_params.mouth_gan_loss * get_ganloss_weight(global_step) * adapted_weight
+
+                    # Process feature matching loss for mouth if enabled
+                    if cfg.loss_params.fm_loss[0] > 0:
+                        L_feature_matching = 0.
+                        for scale in loss_dict['disc_scales']:
+                            key = 'feature_maps_%s' % scale
+                            for i, (a, b) in enumerate(zip(mouth_discriminator_maps_real[key], mouth_discriminator_maps_generated[key])):
+                                value = torch.abs(a - b).mean()
+                                L_feature_matching += value * cfg.loss_params.fm_loss[i]
+                        loss += L_feature_matching * adapted_weight
+                        fm_loss_accum += L_feature_matching.item()
+            
+                # Process sync loss if enabled
+                if cfg.loss_params.sync_loss > 0:
+                    pred_frames = rearrange(
+                        image_pred, '(b f) c h w-> b (f c) h w', f=pixel_values_backward.shape[1])
+                    pred_frames = pred_frames[:, :, height // 2 :, :]
+                    # with accelerator.autocast():
                     sync_loss, image_audio_sim_pred = get_sync_loss(
-                        audio_embed.float(), 
-                        gt_frames.float(), 
-                        pred_frames.float(), 
+                        audio_embed.to(weight_dtype), 
+                        gt_frames.to(weight_dtype), 
+                        pred_frames.to(weight_dtype), 
                         syncnet, 
                         adapted_weight,
                         weight_dtype,
@@ -450,15 +450,15 @@ def main(cfg):
                         frames_left_index=frames_left_index,
                         frames_right_index=frames_right_index,
                     )
-                    accelerator.print(f"sync_loss: {sync_loss:.6f},sync_loss dtype: {sync_loss.dtype}")
+                    # accelerator.print(f"sync_loss: {sync_loss:.6f},sync_loss dtype: {sync_loss.dtype}")
                     # sync_loss = sync_loss.clamp(min=-65504, max=65504)
                     if torch.isnan(sync_loss).any():
-                        print("sync_loss is nan, set it to 0")
+                        accelerator.print(f"sync_loss is nan")
                         # sync_loss = torch.tensor(0.001, requires_grad=True)
                         sync_loss = last_sync_loss.clone().detach().requires_grad_(True)
                     else:
                         last_sync_loss = sync_loss.detach().clone()
-                    # sync_loss_accum += sync_loss.item()
+                    sync_loss_accum += sync_loss.item()
                     
                     loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight
 

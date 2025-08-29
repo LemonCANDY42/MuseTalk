@@ -62,7 +62,7 @@ discriminator_train_params:
   patch_size: 1  # Size of patches for discriminator
   betas: [0.5, 0.999]  # Beta parameters for Adam optimizer
   epochs: 10000  # Number of training epochs
-  start_gan: 500 # 1000  # Step to start GAN training
+  start_gan: 200 # 1000  # Step to start GAN training
 
 solver:
   gradient_accumulation_steps: 8 # 8  # Number of steps for gradient accumulation
@@ -73,12 +73,12 @@ solver:
   max_train_steps: 500000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 1.0e-6 # 5.0e-6 # Base learning rate
+  learning_rate: 5.0e-7 # 5.0e-6 # Base learning rate
   scale_lr: False  # Whether to scale learning rate
-  lr_warmup_steps: 500 # 1000 # Number of warmup steps for learning rate
+  lr_warmup_steps: 200 # 1000 # Number of warmup steps for learning rate
   lr_scheduler: "linear" # "constant_with_warmup" # "linear"  # Type of learning rate scheduler
   # Optimizer parameters
-  use_8bit_adam: False  # Whether to use 8-bit Adam optimizer
+  use_8bit_adam: True  # Whether to use 8-bit Adam optimizer
   adam_beta1: 0.5  # Beta1 parameter for Adam optimizer
   adam_beta2: 0.999  # Beta2 parameter for Adam optimizer
   adam_weight_decay: 1.0e-2  # Weight decay for Adam optimizer
