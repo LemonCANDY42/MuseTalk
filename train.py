@@ -89,8 +89,7 @@ def main(cfg):
     model_dict = initialize_models_and_optimizers(cfg, accelerator, weight_dtype)
     dataloader_dict = initialize_dataloaders(cfg)
     loss_dict = initialize_loss_functions(cfg, accelerator, model_dict['scheduler_max_steps'])
-    if cfg.loss_params.sync_loss > 0:
-        syncnet = initialize_syncnet(cfg, accelerator) # , weight_dtype=weight_dtype
+    syncnet = initialize_syncnet(cfg, accelerator,weight_dtype) # , weight_dtype=weight_dtype
     vgg_IN, pyramid, downsampler = initialize_vgg(cfg, accelerator)
 
     # Prepare everything with our `accelerator`.
@@ -406,7 +405,8 @@ def main(cfg):
                                 value = torch.abs(a - b).mean()
                                 L_feature_matching += value * cfg.loss_params.fm_loss[i]
                         loss += L_feature_matching * adapted_weight
-                        fm_loss_accum += L_feature_matching.item()
+                        fm_loss_accum += L_feature_matching.item()    
+                                        
 
                 # Process mouth GAN loss if enabled
                 if cfg.loss_params.mouth_gan_loss > 0:
@@ -453,12 +453,13 @@ def main(cfg):
                     )
                     # accelerator.print(f"sync_loss: {sync_loss:.6f},sync_loss dtype: {sync_loss.dtype}")
                     # sync_loss = sync_loss.clamp(min=-65504, max=65504)
-                    if torch.isnan(sync_loss).any():
-                        accelerator.print(f"sync_loss is nan")
-                        # sync_loss = torch.tensor(0.001, requires_grad=True)
-                        sync_loss = last_sync_loss.clone().detach().requires_grad_(True)
-                    else:
-                        last_sync_loss = sync_loss.detach().clone()
+                    
+                    # if torch.isnan(sync_loss).any():
+                    #     accelerator.print(f"sync_loss is nan")
+                    #     # sync_loss = torch.tensor(0.001, requires_grad=True)
+                    #     sync_loss = last_sync_loss.clone().detach().requires_grad_(True)
+                    # else:
+                    #     last_sync_loss = sync_loss.detach().clone()
                     sync_loss_accum += sync_loss.item()
                     
                     loss += sync_loss * cfg.loss_params.sync_loss * adapted_weight

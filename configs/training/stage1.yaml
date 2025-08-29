@@ -35,7 +35,7 @@ data:
 
 loss_params:
   use_smooth_l1_loss: True
-  l1_loss: 10 # 1 # Weight for L1 loss
+  l1_loss: 1 # 1 # Weight for L1 loss
   l2_loss:  0 # Weight for L2 loss
   vgg_loss: 0.1  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
@@ -70,13 +70,13 @@ solver:
   mixed_precision: 'fp16' # 'bf16'  # Precision mode for training
   enable_xformers_memory_efficient_attention: True  # Whether to use memory efficient attention
   gradient_checkpointing: True  # Whether to use gradient checkpointing
-  max_train_steps: 60000 # 250000  # Maximum number of training steps
+  max_train_steps: 250000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 2.5e-6 # 8.0e-6  # 2.0e-5  # Base learning rate
+  learning_rate: 5e-6 # 8.0e-6  # 2.0e-5  # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 100 # 1000  # Number of warmup steps for learning rate
-  lr_scheduler: "cosine" # "cosine" # "linear"  # Type of learning rate scheduler
+  lr_scheduler: "cosine_with_restarts" # "cosine" # "linear"  # Type of learning rate scheduler
   # Optimizer parameters
   use_8bit_adam: False  # Whether to use 8-bit Adam optimizer
   adam_beta1: 0.5  # Beta1 parameter for Adam optimizer

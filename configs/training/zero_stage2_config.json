@@ -21,7 +21,7 @@
     },
     "fp16": {
     "enabled": "auto",
-    "auto_cast": false,
+    "auto_cast": true,
     "loss_scale": 0,
     "initial_scale_power": 16,
     "loss_scale_window": 1000,

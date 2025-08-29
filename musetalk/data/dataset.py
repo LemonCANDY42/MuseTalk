@@ -72,7 +72,7 @@ class FaceDataset(Dataset):
         self.jaw2edge_margin_mean = cfg['cropping_jaw2edge_margin_mean']
         self.jaw2edge_margin_std = cfg['cropping_jaw2edge_margin_std']
         self.random_margin_method = cfg['random_margin_method']
-        
+        self.cfg = cfg
         # Image transformations
         self.to_tensor = transforms.Compose([
             transforms.ToTensor(),
@@ -478,7 +478,8 @@ class FaceDataset(Dataset):
             try:
                 audio_feature, audio_offset = self.get_audio_file(wav_path, audio_offset)
                 _, audio_offset = self.get_audio_file_mel(wav_path, audio_offset)
-                audio_feature_mel = self.get_syncnet_input(video_path)
+                if self.cfg.loss_params.sync_loss > 0:
+                    audio_feature_mel = self.get_syncnet_input(video_path)
             except Exception as e:
                 print(f"audio file error:{wav_path}")
                 print(e)
@@ -486,29 +487,46 @@ class FaceDataset(Dataset):
                 time.sleep(0.001)
                 continue
             
-            mel = self.crop_audio_window(audio_feature_mel, audio_offset)
-            if mel.shape[0] != syncnet_mel_step_size:
-                attempts += 1
-                print(f"video {video_path} has invalid mel spectrogram shape: {mel.shape}, expected: {syncnet_mel_step_size}")
-                continue
+            if self.cfg.loss_params.sync_loss > 0:
+                mel = self.crop_audio_window(audio_feature_mel, audio_offset)
+                if mel.shape[0] != syncnet_mel_step_size:
+                    attempts += 1
+                    print(f"video {video_path} has invalid mel spectrogram shape: {mel.shape}, expected: {syncnet_mel_step_size}")
+                    continue
                 
-            mel = torch.FloatTensor(mel.T).unsqueeze(0)
+                mel = torch.FloatTensor(mel.T).unsqueeze(0)
             
-            # Build sample dictionary
-            sample = dict(
-                pixel_values_vid=torch.stack(
-                    [self.to_tensor(imSameID) for imSameID in imSameIDs], dim=0),
-                pixel_values_ref_img=torch.stack(
-                    [self.to_tensor(ref_img) for ref_img in ref_imgs], dim=0),
-                pixel_values_face_mask=torch.stack(
-                    [self.pose_to_tensor(face_mask) for face_mask in face_masks], dim=0),
-                audio_feature=audio_feature[0],
-                audio_offset=audio_offset,
-                audio_step=audio_step,
-                mel=mel,
-                wav_path=wav_path,
-                fps=fps,
-            )
+                # Build sample dictionary
+                sample = dict(
+                    pixel_values_vid=torch.stack(
+                        [self.to_tensor(imSameID) for imSameID in imSameIDs], dim=0),
+                    pixel_values_ref_img=torch.stack(
+                        [self.to_tensor(ref_img) for ref_img in ref_imgs], dim=0),
+                    pixel_values_face_mask=torch.stack(
+                        [self.pose_to_tensor(face_mask) for face_mask in face_masks], dim=0),
+                    audio_feature=audio_feature[0],
+                    audio_offset=audio_offset,
+                    audio_step=audio_step,
+                    mel=mel,
+                    wav_path=wav_path,
+                    fps=fps,
+                )
+            else:
+                # Build sample dictionary
+                sample = dict(
+                    pixel_values_vid=torch.stack(
+                        [self.to_tensor(imSameID) for imSameID in imSameIDs], dim=0),
+                    pixel_values_ref_img=torch.stack(
+                        [self.to_tensor(ref_img) for ref_img in ref_imgs], dim=0),
+                    pixel_values_face_mask=torch.stack(
+                        [self.pose_to_tensor(face_mask) for face_mask in face_masks], dim=0),
+                    audio_feature=audio_feature[0],
+                    audio_offset=audio_offset,
+                    audio_step=audio_step,
+                    # mel=mel,
+                    wav_path=wav_path,
+                    fps=fps,
+                )
             # del cap  # Free memory
             gc.collect()  # Collect garbage
             return sample

@@ -35,15 +35,15 @@ data:
 
 loss_params:
   use_smooth_l1_loss: True
-  l1_loss: 5 # 1 # Weight for L1 loss
+  l1_loss: 1 # 1 # Weight for L1 loss
   l2_loss: 0  # Weight for L2 loss
   vgg_loss: 0.05 # 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
   pyramid_scale: [1, 0.5, 0.25, 0.125]  # Scales for image pyramid
-  gan_loss: 0.015 # 0.01 # Weight for GAN loss
+  gan_loss: 0.02 # 0.01 # Weight for GAN loss
   fm_loss: [1.0, 1.0, 1.0, 1.0]  # Weights for feature matching loss
   sync_loss: 0.08 # 0.05  # Weight for sync loss
-  mouth_gan_loss: 0.015 # 0.01  # Weight for mouth-specific GAN loss
+  mouth_gan_loss: 0.02 # 0.01  # Weight for mouth-specific GAN loss
 
 model_params:
   discriminator_params:
@@ -76,7 +76,7 @@ solver:
   learning_rate: 5.0e-7 # 5.0e-6 # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 200 # 1000 # Number of warmup steps for learning rate
-  lr_scheduler: "linear" # "constant_with_warmup" # "linear"  # Type of learning rate scheduler
+  lr_scheduler: "cosine_with_restarts" # "cosine" # "linear"  # Type of learning rate scheduler
   # Optimizer parameters
   use_8bit_adam: True  # Whether to use 8-bit Adam optimizer
   adam_beta1: 0.5  # Beta1 parameter for Adam optimizer
