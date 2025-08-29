@@ -89,7 +89,8 @@ def main(cfg):
     model_dict = initialize_models_and_optimizers(cfg, accelerator, weight_dtype)
     dataloader_dict = initialize_dataloaders(cfg)
     loss_dict = initialize_loss_functions(cfg, accelerator, model_dict['scheduler_max_steps'])
-    syncnet = initialize_syncnet(cfg, accelerator, weight_dtype=weight_dtype) # weight_dtype
+    if cfg.loss_params.sync_loss > 0:
+        syncnet = initialize_syncnet(cfg, accelerator) # , weight_dtype=weight_dtype
     vgg_IN, pyramid, downsampler = initialize_vgg(cfg, accelerator)
 
     # Prepare everything with our `accelerator`.
