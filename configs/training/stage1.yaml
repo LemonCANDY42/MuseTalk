@@ -4,7 +4,7 @@ unet_sub_folder: musetalkV15  # Subfolder name for UNet model
 random_init_unet: False  # False  # Whether to randomly initialize UNet (stage1) or use pretrained weights (stage2)
 whisper_path: "./models/whisper"  # Path to the Whisper model
 pretrained_model_name_or_path: "./models"  # "./models"   # Path to pretrained models
-unet_model_name: "unet-8-25-stage1-60000.pth" # "unet.pth"
+unet_model_name: "unet_ori.pth" # "unet.pth"
 resume_from_checkpoint: True  # Whether to resume training from a checkpoint
 padding_pixel_mouth: 10  # Number of pixels to pad around the mouth region
 vae_type: "sd-vae" # "sd-vae"  # Type of VAE model to use
@@ -73,7 +73,7 @@ solver:
   max_train_steps: 60000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 1.0e-6 # 8.0e-6  # 2.0e-5  # Base learning rate
+  learning_rate: 2.0e-6 # 8.0e-6  # 2.0e-5  # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 500 # 1000  # Number of warmup steps for learning rate
   lr_scheduler: "linear" # "constant_with_warmup" # "linear"  # Type of learning rate scheduler
