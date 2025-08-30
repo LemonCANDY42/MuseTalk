@@ -40,10 +40,10 @@ loss_params:
   vgg_loss: 0.05 # 0.01  # Weight for VGG perceptual loss
   vgg_layer_weight: [1, 1, 1, 1, 1]  # Weights for different VGG layers
   pyramid_scale: [1, 0.5, 0.25, 0.125]  # Scales for image pyramid
-  gan_loss: 0.02 # 0.01 # Weight for GAN loss
+  gan_loss: 0.03 # 0.01 # Weight for GAN loss
   fm_loss: [1.0, 1.0, 1.0, 1.0]  # Weights for feature matching loss
   sync_loss: 0.08 # 0.05  # Weight for sync loss
-  mouth_gan_loss: 0.02 # 0.01  # Weight for mouth-specific GAN loss
+  mouth_gan_loss: 0.03 # 0.01  # Weight for mouth-specific GAN loss
 
 model_params:
   discriminator_params:
@@ -73,7 +73,7 @@ solver:
   max_train_steps: 500000 # 250000  # Maximum number of training steps
   max_grad_norm: 1.0  # Maximum gradient norm for clipping
   # Learning rate parameters
-  learning_rate: 5.0e-7 # 5.0e-6 # Base learning rate
+  learning_rate: 1.25e-6 # 5.0e-6 # Base learning rate
   scale_lr: False  # Whether to scale learning rate
   lr_warmup_steps: 200 # 1000 # Number of warmup steps for learning rate
   lr_scheduler: "cosine_with_restarts" # "cosine" # "linear"  # Type of learning rate scheduler

@@ -65,7 +65,7 @@ discriminator_train_params:
   start_gan: 100  # Step to start GAN training
 
 solver:
-  gradient_accumulation_steps: 4 # 1  # Number of steps for gradient accumulation
+  gradient_accumulation_steps: 1 # 1  # Number of steps for gradient accumulation
   uncond_steps: 10  # Number of unconditional steps
   mixed_precision: 'fp16' # 'bf16'  # Precision mode for training
   enable_xformers_memory_efficient_attention: True  # Whether to use memory efficient attention
